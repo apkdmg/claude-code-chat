@@ -1,4 +1,4 @@
-import styles from './ui-styles'
+import styles from './ui-styles';
 const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -550,8 +550,20 @@ const html = `<!DOCTYPE html>
 						labelDiv.textContent = 'Claude';
 						break;
 					case 'error':
-						iconDiv.textContent = '⚠️';
-						labelDiv.textContent = 'Error';
+						// Check if this is a Claude usage limit error
+						if (content.includes('Claude usage limit reached')) {
+							iconDiv.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
+							labelDiv.textContent = 'Usage Limit';
+							messageDiv.classList.add('usage-limit');
+						} else {
+							// Create compact error layout for long errors
+							const isLongError = content.length > 100;
+							if (isLongError) {
+								messageDiv.classList.add('compact');
+							}
+							iconDiv.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>';
+							labelDiv.textContent = 'Error';
+						}
 						break;
 				}
 				
@@ -577,6 +589,9 @@ const html = `<!DOCTYPE html>
 			
 			if(type == 'user' || type === 'claude' || type === 'thinking'){
 				contentDiv.innerHTML = content;
+			} else if (type === 'error' && messageDiv.classList.contains('compact')) {
+				// Handle compact error layout
+				createCompactErrorContent(contentDiv, content);
 			} else {
 				const preElement = document.createElement('pre');
 				preElement.textContent = content;
@@ -778,6 +793,12 @@ const html = `<!DOCTYPE html>
 					}
 				}
 				
+				// Add has-expand-btn class if content contains expand buttons
+				if (contentDiv.innerHTML.includes('expand-btn')) {
+					contentDiv.classList.add('has-expand-btn');
+					inputElement.classList.add('has-expand-btn');
+				}
+				
 				inputElement.appendChild(contentDiv);
 				messageDiv.appendChild(inputElement);
 			} else if (data.toolInput) {
@@ -803,19 +824,19 @@ const html = `<!DOCTYPE html>
 
 		function createExpandableInput(toolInput, rawInput) {
 			try {
-				let html = toolInput.replace(/\\[expand\\]/g, '<span class="expand-btn" onclick="toggleExpand(this)">expand</span>');
+				let html = toolInput.replace(/\\[expand\\]/g, '<span class="expand-btn expand-btn-tool" onclick="toggleExpand(this)">...</span>');
 				
 				// Store raw input data for expansion
 				if (rawInput && typeof rawInput === 'object') {
 					let btnIndex = 0;
-					html = html.replace(/<span class="expand-btn"[^>]*>expand<\\/span>/g, (match) => {
+					html = html.replace(/<span class="expand-btn expand-btn-tool"[^>]*>\.\.\.<\\/span>/g, (match) => {
 						const keys = Object.keys(rawInput);
 						const key = keys[btnIndex] || '';
 						const value = rawInput[key] || '';
 						const valueStr = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 						const escapedValue = valueStr.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 						btnIndex++;
-						return \`<span class="expand-btn" data-key="\${key}" data-value="\${escapedValue}" onclick="toggleExpand(this)">expand</span>\`;
+						return \`<span class="expand-btn expand-btn-tool" data-key="\${key}" data-value="\${escapedValue}" onclick="toggleExpand(this)">...</span>\`;
 					});
 				}
 				
@@ -848,60 +869,87 @@ const html = `<!DOCTYPE html>
 			}
 
 			const messageDiv = document.createElement('div');
-			messageDiv.className = data.isError ? 'message error' : 'message tool-result';
+			messageDiv.className = data.isError ? 'message error' : 'message tool-result-compact';
 			
-			// Create header
-			const headerDiv = document.createElement('div');
-			headerDiv.className = 'message-header';
-			
-			const iconDiv = document.createElement('div');
-			iconDiv.className = data.isError ? 'message-icon error' : 'message-icon';
-			iconDiv.style.background = data.isError ? 
-				'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)' : 
-				'linear-gradient(135deg, #1cc08c 0%, #16a974 100%)';
-			iconDiv.textContent = data.isError ? '❌' : '✅';
-			
-			const labelDiv = document.createElement('div');
-			labelDiv.className = 'message-label';
-			labelDiv.textContent = data.isError ? 'Error' : 'Result';
-			
-			headerDiv.appendChild(iconDiv);
-			headerDiv.appendChild(labelDiv);
-			messageDiv.appendChild(headerDiv);
-			
-			// Add content
-			const contentDiv = document.createElement('div');
-			contentDiv.className = 'message-content';
-			
-			// Check if it's a tool result and truncate appropriately
-			let content = data.content;
-			if (content.length > 200 && !data.isError) {
-				const truncateAt = 197;
-				const truncated = content.substring(0, truncateAt);
-				const resultId = 'result_' + Math.random().toString(36).substr(2, 9);
+			if (data.isError) {
+				// Keep original error layout for errors
+				const headerDiv = document.createElement('div');
+				headerDiv.className = 'message-header';
 				
+				const iconDiv = document.createElement('div');
+				iconDiv.className = 'message-icon error';
+				iconDiv.style.background = 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)';
+				iconDiv.textContent = '❌';
+				
+				const labelDiv = document.createElement('div');
+				labelDiv.className = 'message-label';
+				labelDiv.textContent = 'Error';
+				
+				headerDiv.appendChild(iconDiv);
+				headerDiv.appendChild(labelDiv);
+				messageDiv.appendChild(headerDiv);
+				
+				const contentDiv = document.createElement('div');
+				contentDiv.className = 'message-content';
 				const preElement = document.createElement('pre');
-				preElement.innerHTML = '<span id="' + resultId + '_visible">' + escapeHtml(truncated) + '</span>' +
-									   '<span id="' + resultId + '_ellipsis">...</span>' +
-									   '<span id="' + resultId + '_hidden" style="display: none;">' + escapeHtml(content.substring(truncateAt)) + '</span>';
+				preElement.textContent = data.content;
 				contentDiv.appendChild(preElement);
-				
-				// Add expand button container
-				const expandContainer = document.createElement('div');
-				expandContainer.className = 'diff-expand-container';
-				const expandButton = document.createElement('button');
-				expandButton.className = 'diff-expand-btn';
-				expandButton.textContent = 'Show more';
-				expandButton.setAttribute('onclick', 'toggleResultExpansion(\\'' + resultId + '\\\')');
-				expandContainer.appendChild(expandButton);
-				contentDiv.appendChild(expandContainer);
+				messageDiv.appendChild(contentDiv);
 			} else {
-				const preElement = document.createElement('pre');
-				preElement.textContent = content;
-				contentDiv.appendChild(preElement);
+				// Create container with relative positioning for label overflow
+				const containerDiv = document.createElement('div');
+				containerDiv.className = 'result-container';
+				
+				// Create top-left label that overflows outside the main box
+				const labelDiv = document.createElement('div');
+				labelDiv.className = 'result-top-label';
+				
+				const iconSpan = document.createElement('span');
+				iconSpan.className = 'result-top-icon';
+				iconSpan.textContent = '✅';
+				
+				const textSpan = document.createElement('span');
+				textSpan.textContent = 'RESULT';
+				
+				labelDiv.appendChild(iconSpan);
+				labelDiv.appendChild(textSpan);
+				
+				// Create main content box
+				const contentBox = document.createElement('div');
+				contentBox.className = 'result-content-box';
+				
+				const contentDiv = document.createElement('div');
+				contentDiv.className = 'result-content-text';
+				
+				// Check if content needs truncation
+				let content = data.content;
+				if (content.length > 200) {
+					const truncateAt = 197;
+					const truncated = content.substring(0, truncateAt);
+					const resultId = 'result_' + Math.random().toString(36).substr(2, 9);
+					
+					contentDiv.innerHTML = '<span id="' + resultId + '_visible">' + escapeHtml(truncated) + '</span>' +
+										  '<span id="' + resultId + '_ellipsis">...</span>' +
+										  '<span id="' + resultId + '_hidden" style="display: none;">' + escapeHtml(content.substring(truncateAt)) + '</span>';
+					
+					// Add show more button at bottom right
+					const expandButton = document.createElement('button');
+					expandButton.className = 'result-show-more-btn';
+					expandButton.innerHTML = '...';
+					expandButton.setAttribute('onclick', 'toggleResultExpansion(\\'' + resultId + '\\\')');
+					
+					contentBox.appendChild(contentDiv);
+					contentBox.appendChild(expandButton);
+				} else {
+					contentDiv.textContent = content;
+					contentBox.appendChild(contentDiv);
+				}
+				
+				containerDiv.appendChild(labelDiv);
+				containerDiv.appendChild(contentBox);
+				messageDiv.appendChild(containerDiv);
 			}
 			
-			messageDiv.appendChild(contentDiv);
 			messagesDiv.appendChild(messageDiv);
 			messagesDiv.scrollTop = messagesDiv.scrollHeight;
 		}
@@ -918,7 +966,7 @@ const html = `<!DOCTYPE html>
 						   '<span id="' + inputId + '_ellipsis">...</span>' +
 						   '<span id="' + inputId + '_hidden" style="display: none;">' + escapeHtml(str.substring(truncateAt)) + '</span>' +
 						   '<div class="diff-expand-container">' +
-						   '<button class="diff-expand-btn" onclick="toggleResultExpansion(\\\'' + inputId + '\\\')">Show more</button>' +
+						   '<button class="diff-expand-btn" onclick="toggleResultExpansion(\\\'' + inputId + '\\\')">...</button>' +
 						   '</div>';
 				}
 				return str;
@@ -945,7 +993,7 @@ const html = `<!DOCTYPE html>
 				} else if (valueStr.length > 100) {
 					const truncated = valueStr.substring(0, 97) + '...';
 					const escapedValue = valueStr.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-					result += '<strong>' + key + ':</strong> ' + truncated + ' <span class="expand-btn" data-key="' + key + '" data-value="' + escapedValue + '" onclick="toggleExpand(this)">expand</span>';
+					result += '<strong>' + key + ':</strong> ' + truncated + ' <span class="expand-btn expand-btn-tool" data-key="' + key + '" data-value="' + escapedValue + '" onclick="toggleExpand(this)">...</span>';
 				} else {
 					result += '<strong>' + key + ':</strong> ' + valueStr;
 				}
@@ -1005,7 +1053,7 @@ const html = `<!DOCTYPE html>
 				
 				// Add expand button
 				result += '<div class="diff-expand-container">';
-				result += '<button class="diff-expand-btn" onclick="toggleDiffExpansion(\\\'' + diffId + '\\\')">Show ' + hiddenLines.length + ' more lines</button>';
+				result += '<button class="diff-expand-btn" onclick="toggleDiffExpansion(\\\'' + diffId + '\\\')">...</button>';
 				result += '</div>';
 			}
 			
@@ -1097,7 +1145,7 @@ const html = `<!DOCTYPE html>
 				
 				// Add expand button
 				result += '<div class="diff-expand-container">';
-				result += '<button class="diff-expand-btn" onclick="toggleDiffExpansion(\\\'' + diffId + '\\\')">Show ' + hiddenEdits.length + ' more edit' + (hiddenEdits.length > 1 ? 's' : '') + '</button>';
+				result += '<button class="diff-expand-btn" onclick="toggleDiffExpansion(\\\'' + diffId + '\\\')">...</button>';
 				result += '</div>';
 			}
 			
@@ -1181,7 +1229,7 @@ const html = `<!DOCTYPE html>
 				
 				// Add expand button
 				result += '<div class="diff-expand-container">';
-				result += '<button class="diff-expand-btn" onclick="toggleDiffExpansion(\\\'' + diffId + '\\\')">Show ' + hiddenLines.length + ' more lines</button>';
+				result += '<button class="diff-expand-btn" onclick="toggleDiffExpansion(\\\'' + diffId + '\\\')">...</button>';
 				result += '</div>';
 			}
 			
@@ -1229,11 +1277,11 @@ const html = `<!DOCTYPE html>
 			if (hiddenDiv && button) {
 				if (hiddenDiv.style.display === 'none') {
 					hiddenDiv.style.display = 'block';
-					button.textContent = 'Show less';
+					button.textContent = '↑';
 				} else {
 					hiddenDiv.style.display = 'none';
 					const hiddenLines = hiddenDiv.querySelectorAll('.diff-line').length;
-					button.textContent = 'Show ' + hiddenLines + ' more lines';
+					button.textContent = '...';
 				}
 			}
 		}
@@ -1245,13 +1293,33 @@ const html = `<!DOCTYPE html>
 			
 			if (hiddenDiv && button) {
 				if (hiddenDiv.style.display === 'none') {
+					// Expand
 					hiddenDiv.style.display = 'inline';
 					if (ellipsis) ellipsis.style.display = 'none';
-					button.textContent = 'Show less';
+					
+					// Update button text and icon
+					if (button.classList.contains('result-show-more-btn')) {
+						// New Result button with icon - use CSS rotation for arrow
+						button.innerHTML = '↑';
+						button.classList.add('expanded');
+					} else {
+						// Legacy button without icon
+						button.textContent = '↑';
+					}
 				} else {
+					// Collapse
 					hiddenDiv.style.display = 'none';
 					if (ellipsis) ellipsis.style.display = 'inline';
-					button.textContent = 'Show more';
+					
+					// Update button text and icon
+					if (button.classList.contains('result-show-more-btn')) {
+						// New Result button with icon
+						button.innerHTML = '...';
+						button.classList.remove('expanded');
+					} else {
+						// Legacy button without icon
+						button.textContent = '...';
+					}
 				}
 			}
 		}
@@ -2813,6 +2881,137 @@ const html = `<!DOCTYPE html>
 				}
 			}
 		});
+
+		// Compact error content creation
+		function createCompactErrorContent(contentDiv, content) {
+			// Detect error type and extract summary
+			const errorInfo = parseErrorContent(content);
+			
+			// Create error summary
+			const summaryDiv = document.createElement('div');
+			summaryDiv.className = 'error-summary';
+			summaryDiv.onclick = () => toggleErrorDetails(contentDiv);
+			
+			// Add error type badge if detected
+			if (errorInfo.type) {
+				const badgeDiv = document.createElement('span');
+				badgeDiv.className = \`error-type-badge \${errorInfo.type}\`;
+				badgeDiv.textContent = errorInfo.type;
+				summaryDiv.appendChild(badgeDiv);
+			}
+			
+			// Add summary text
+			const summaryTextDiv = document.createElement('div');
+			summaryTextDiv.className = 'error-summary-text';
+			summaryTextDiv.textContent = errorInfo.summary;
+			summaryDiv.appendChild(summaryTextDiv);
+			
+			// Add toggle button
+			const toggleDiv = document.createElement('div');
+			toggleDiv.className = 'error-toggle';
+			toggleDiv.textContent = 'Details';
+			summaryDiv.appendChild(toggleDiv);
+			
+			contentDiv.appendChild(summaryDiv);
+			
+			// Create collapsible details section
+			const detailsDiv = document.createElement('div');
+			detailsDiv.className = 'error-details';
+			detailsDiv.textContent = content;
+			contentDiv.appendChild(detailsDiv);
+		}
+		
+		function parseErrorContent(content) {
+			const lines = content.split('\\n');
+			const firstLine = lines[0] || content;
+			
+			let type = '';
+			let summary = firstLine;
+			
+			// Detect common error types
+			if (content.toLowerCase().includes('regex') || content.toLowerCase().includes('regexp')) {
+				type = 'regex';
+				summary = 'Regular expression parse error';
+			} else if (content.toLowerCase().includes('parse') || content.toLowerCase().includes('parsing')) {
+				type = 'parse';
+				summary = 'Parsing error occurred';
+			} else if (content.toLowerCase().includes('syntax')) {
+				type = 'syntax';
+				summary = 'Syntax error detected';
+			} else {
+				// Extract meaningful summary from first line
+				if (firstLine.length > 60) {
+					summary = firstLine.substring(0, 57) + '...';
+				}
+			}
+			
+			return { type, summary };
+		}
+		
+		function toggleErrorDetails(contentDiv) {
+			const detailsDiv = contentDiv.querySelector('.error-details');
+			const toggleDiv = contentDiv.querySelector('.error-toggle');
+			
+			if (detailsDiv.classList.contains('expanded')) {
+				detailsDiv.classList.remove('expanded');
+				toggleDiv.textContent = 'Details';
+			} else {
+				detailsDiv.classList.add('expanded');
+				toggleDiv.textContent = 'Hide';
+			}
+		}
+
+		function toggleExpand(button) {
+			const key = button.dataset.key;
+			const value = button.dataset.value;
+			
+			if (!key || !value) {
+				console.error('toggleExpand: Missing key or value data');
+				return;
+			}
+			
+			// Find parent container
+			const container = button.closest('.tool-input-content, .message-content, .tool-input');
+			if (!container) {
+				console.error('toggleExpand: Could not find parent container');
+				return;
+			}
+			
+			// Add has-expand-btn class to container for proper spacing
+			if (container.classList.contains('tool-input') || container.classList.contains('tool-input-content')) {
+				container.classList.add('has-expand-btn');
+			}
+			
+			// Check if already expanded
+			let expandedDiv = container.querySelector('.expanded-content[data-key="' + key + '"]');
+			
+			if (expandedDiv) {
+				// Collapse: remove expanded content and restore original button
+				expandedDiv.remove();
+				button.textContent = '...';
+				button.style.display = 'flex';
+			} else {
+				// Expand: create expanded content div
+				expandedDiv = document.createElement('div');
+				expandedDiv.className = 'expanded-content';
+				expandedDiv.setAttribute('data-key', key);
+				
+				const pre = document.createElement('pre');
+				pre.textContent = value.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+				expandedDiv.appendChild(pre);
+				
+				// Insert the expanded content after the current element
+				const parentElement = button.parentElement;
+				if (parentElement.nextSibling) {
+					parentElement.parentNode.insertBefore(expandedDiv, parentElement.nextSibling);
+				} else {
+					parentElement.parentNode.appendChild(expandedDiv);
+				}
+				
+				// Update button to show collapse option
+				button.textContent = '↑';
+			}
+		}
 
 	</script>
 </body>

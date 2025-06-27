@@ -88,6 +88,19 @@ const styles = `
         }
     }
 
+    @keyframes errorSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(12px) scale(0.98);
+            box-shadow: 0 2px 8px rgba(231, 76, 60, 0.08);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            box-shadow: 0 4px 16px rgba(231, 76, 60, 0.12);
+        }
+    }
+
     .wsl-alert-content {
         display: flex;
         align-items: center;
@@ -197,11 +210,15 @@ const styles = `
     }
 
     .message.error {
-        border: 1px solid rgba(231, 76, 60, 0.3);
-        border-radius: 8px;
+        border: 1px solid rgba(231, 76, 60, 0.2);
+        border-radius: 12px;
         color: var(--vscode-editor-foreground);
         position: relative;
         overflow: hidden;
+        background: linear-gradient(135deg, rgba(231, 76, 60, 0.08) 0%, rgba(192, 57, 43, 0.05) 100%);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 16px rgba(231, 76, 60, 0.12);
+        animation: errorSlideIn 0.4s ease-out;
     }
 
     .message.error::before {
@@ -212,6 +229,193 @@ const styles = `
         bottom: 0;
         width: 4px;
         background: linear-gradient(180deg, #e74c3c 0%, #c0392b 100%);
+        border-radius: 12px 0 0 12px;
+    }
+
+    .message.error::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, transparent 0%, rgba(255, 255, 255, 0.02) 100%);
+        pointer-events: none;
+        border-radius: 12px;
+    }
+
+    .message.error.usage-limit {
+        border: 1px solid rgba(255, 152, 0, 0.3);
+        background: linear-gradient(135deg, rgba(255, 152, 0, 0.08) 0%, rgba(255, 193, 7, 0.05) 100%);
+        box-shadow: 0 4px 16px rgba(255, 152, 0, 0.15);
+    }
+
+    .message.error.usage-limit::before {
+        background: linear-gradient(180deg, #ff9800 0%, #ff5722 100%);
+    }
+
+    .message.error.usage-limit .message-icon.error {
+        background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+        box-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
+    }
+
+    .message.error.usage-limit .message-icon.error svg {
+        color: white;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+    }
+
+    .message.error.usage-limit .message-label {
+        color: #ff9800;
+        font-weight: 700;
+    }
+
+    .message.error .message-content {
+        padding-left: 8px;
+        font-family: var(--vscode-font-family);
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .message.error .message-content pre {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 14px 16px;
+        margin: 8px 0;
+        font-family: var(--vscode-font-family);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--vscode-foreground);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .message.error.usage-limit .message-content pre {
+        background: rgba(255, 152, 0, 0.1);
+        border: 1px solid rgba(255, 152, 0, 0.2);
+        color: var(--vscode-foreground);
+    }
+
+    /* Compact Error Styling */
+    .message.error.compact {
+        padding: 8px 12px;
+        margin-bottom: 6px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, rgba(231, 76, 60, 0.06) 0%, rgba(192, 57, 43, 0.03) 100%);
+        border: 1px solid rgba(231, 76, 60, 0.15);
+        box-shadow: 0 2px 8px rgba(231, 76, 60, 0.08);
+    }
+
+    .message.error.compact .message-header {
+        margin-bottom: 4px;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .message.error.compact .message-content {
+        padding-left: 0;
+    }
+
+    .error-summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 4px 0;
+        transition: all 0.2s ease;
+    }
+
+    .error-summary:hover {
+        opacity: 0.8;
+    }
+
+    .error-summary-text {
+        font-family: var(--vscode-font-family);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--vscode-foreground);
+        flex: 1;
+    }
+
+    .error-toggle {
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+        opacity: 0.7;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .error-toggle:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .error-details {
+        margin-top: 8px;
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        font-family: var(--vscode-editor-font-family);
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--vscode-descriptionForeground);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-height: 200px;
+        overflow-y: auto;
+        display: none;
+    }
+
+    .error-details.expanded {
+        display: block;
+        animation: errorDetailsSlide 0.3s ease-out;
+    }
+
+    @keyframes errorDetailsSlide {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+            max-height: 0;
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 200px;
+        }
+    }
+
+    .error-type-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-right: 8px;
+    }
+
+    .error-type-badge.regex {
+        background: rgba(156, 39, 176, 0.15);
+        color: #9c27b0;
+        border: 1px solid rgba(156, 39, 176, 0.3);
+    }
+
+    .error-type-badge.parse {
+        background: rgba(255, 152, 0, 0.15);
+        color: #ff9800;
+        border: 1px solid rgba(255, 152, 0, 0.3);
+    }
+
+    .error-type-badge.syntax {
+        background: rgba(244, 67, 54, 0.15);
+        color: #f44336;
+        border: 1px solid rgba(244, 67, 54, 0.3);
     }
 
     .message.system {
@@ -393,6 +597,110 @@ const styles = `
         text-decoration: none;
     }
 
+    /* Modern Result element with top-left label and content-focused design */
+    .message.tool-result-compact {
+        padding: 0;
+        margin: 12px 0;
+        background: transparent;
+        border: none;
+    }
+
+    .result-container {
+        position: relative;
+        padding-top: 16px; /* Space for the top label */
+    }
+
+    .result-top-label {
+        position: absolute;
+        top: -2px;
+        left: 8px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--vscode-descriptionForeground);
+        opacity: 0.7;
+        z-index: 2;
+        background: var(--vscode-editor-background);
+        padding: 0 4px;
+    }
+
+    .result-top-icon {
+        font-size: 8px;
+        line-height: 1;
+    }
+
+    .result-content-box {
+        position: relative;
+        background: rgba(28, 192, 140, 0.04);
+        border: 1px solid rgba(28, 192, 140, 0.15);
+        border-radius: 8px;
+        padding: 16px;
+        transition: all 0.2s ease;
+        font-family: var(--vscode-editor-font-family);
+    }
+
+    .result-content-box:hover {
+        background: rgba(28, 192, 140, 0.06);
+        border-color: rgba(28, 192, 140, 0.25);
+        box-shadow: 0 2px 8px rgba(28, 192, 140, 0.1);
+    }
+
+    .result-content-text {
+        color: var(--vscode-editor-foreground);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 0;
+        padding-bottom: 8px;
+    }
+
+    .result-show-more-btn {
+        position: absolute;
+        bottom: 8px;
+        right: 12px;
+        background: rgba(28, 192, 140, 0.1);
+        border: 1px solid rgba(28, 192, 140, 0.25);
+        color: #1cc08c;
+        padding: 4px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 10px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        opacity: 0.8;
+    }
+
+    .result-show-more-btn:hover {
+        background: rgba(28, 192, 140, 0.15);
+        border-color: rgba(28, 192, 140, 0.4);
+        opacity: 1;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(28, 192, 140, 0.2);
+    }
+
+    .result-show-more-btn:active {
+        transform: translateY(0);
+    }
+
+    .expand-icon {
+        font-size: 8px;
+        transition: transform 0.2s ease;
+        display: inline-block;
+    }
+
+    .result-show-more-btn.expanded .expand-icon {
+        transform: rotate(180deg);
+    }
+
     .message-header {
         display: flex;
         align-items: center;
@@ -483,6 +791,13 @@ const styles = `
 
     .message-icon.error {
         background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        box-shadow: 0 2px 8px rgba(231, 76, 60, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .message-icon.error svg {
+        color: white;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
     }
 
     .message-label {
@@ -561,6 +876,7 @@ const styles = `
         font-size: 12px;
         line-height: 1.4;
         white-space: pre-line;
+        position: relative;
     }
 
     .tool-input-label {
@@ -575,6 +891,13 @@ const styles = `
     .tool-input-content {
         color: var(--vscode-editor-foreground);
         opacity: 0.95;
+        position: relative;
+    }
+
+    /* Add bottom padding only when expand button is present */
+    .tool-input.has-expand-btn,
+    .tool-input-content.has-expand-btn {
+        padding-bottom: 40px;
     }
 
     /* Diff display styles for Edit tool */
@@ -640,9 +963,9 @@ const styles = `
     }
 
     .diff-expand-btn {
-        background: linear-gradient(135deg, rgba(64, 165, 255, 0.15) 0%, rgba(64, 165, 255, 0.1) 100%);
-        border: 1px solid rgba(64, 165, 255, 0.3);
-        color: #40a5ff;
+        background: rgba(120, 139, 237, 0.1);
+        border: 1px solid rgba(120, 139, 237, 0.25);
+        color: #788bed;
         padding: 4px 12px;
         border-radius: 4px;
         cursor: pointer;
@@ -652,8 +975,9 @@ const styles = `
     }
 
     .diff-expand-btn:hover {
-        background: linear-gradient(135deg, rgba(64, 165, 255, 0.25) 0%, rgba(64, 165, 255, 0.15) 100%);
-        border-color: rgba(64, 165, 255, 0.5);
+        background: rgba(120, 139, 237, 0.15);
+        border-color: rgba(120, 139, 237, 0.4);
+        box-shadow: 0 2px 6px rgba(120, 139, 237, 0.2);
     }
 
     .diff-expand-btn:active {
@@ -741,23 +1065,52 @@ const styles = `
     }
 
     .expand-btn {
-        background: linear-gradient(135deg, rgba(64, 165, 255, 0.15) 0%, rgba(64, 165, 255, 0.1) 100%);
-        border: 1px solid rgba(64, 165, 255, 0.3);
-        color: #40a5ff;
         padding: 4px 8px;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 500;
-        margin-left: 6px;
-        display: inline-block;
+        position: absolute;
+        bottom: 8px;
+        right: 12px;
         transition: all 0.2s ease;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        opacity: 0.8;
+        border: 1px solid;
     }
 
     .expand-btn:hover {
-        background: linear-gradient(135deg, rgba(64, 165, 255, 0.25) 0%, rgba(64, 165, 255, 0.15) 100%);
-        border-color: rgba(64, 165, 255, 0.5);
+        opacity: 1;
         transform: translateY(-1px);
+    }
+
+    /* Blue theme for Tool containers */
+    .expand-btn-tool {
+        background: rgba(120, 139, 237, 0.1);
+        border-color: rgba(120, 139, 237, 0.25);
+        color: #788bed;
+    }
+
+    .expand-btn-tool:hover {
+        background: rgba(120, 139, 237, 0.15);
+        border-color: rgba(120, 139, 237, 0.4);
+        box-shadow: 0 2px 6px rgba(120, 139, 237, 0.2);
+    }
+
+    /* Green theme for Result containers */
+    .expand-btn-result {
+        background: rgba(28, 192, 140, 0.1);
+        border-color: rgba(28, 192, 140, 0.25);
+        color: #1cc08c;
+    }
+
+    .expand-btn-result:hover {
+        background: rgba(28, 192, 140, 0.15);
+        border-color: rgba(28, 192, 140, 0.4);
+        box-shadow: 0 2px 6px rgba(28, 192, 140, 0.2);
     }
 
     .expanded-content {
@@ -2070,6 +2423,6 @@ const styles = `
         color: var(--vscode-foreground);
         opacity: 0.8;
     }
-</style>`
+</style>`;
 
-export default styles
+export default styles;

@@ -6,6 +6,16 @@ import html from './ui';
 
 const exec = util.promisify(cp.exec);
 
+/**
+ * Enum for different types of Claude errors
+ */
+enum ClaudeErrorType {
+	None = 'none',
+	UsageLimit = 'usage_limit',
+	NetworkError = 'network_error',
+	AuthError = 'auth_error'
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Claude Code Chat extension is being activated!');
 	
@@ -234,7 +244,11 @@ class ClaudeChatProvider {
 	private _historyProvider: ClaudeChatHistoryProvider | undefined;
 	private _currentClaudeProcess: cp.ChildProcess | undefined;
 	private _selectedModel: string = 'default'; // Default model
-	private _claudeUsageLimitProcessed: boolean = false; // Track if Claude usage limit error was already processed
+	private _processedErrors: Set<ClaudeErrorType> = new Set(); // Track processed error types
+
+	// Error pattern constants
+	private static readonly CLAUDE_USAGE_LIMIT_PATTERN = 'Claude AI usage limit reached|';
+	private static readonly CLAUDE_USAGE_LIMIT_REGEX = /Claude AI usage limit reached\|(\d{10})/;
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -436,8 +450,8 @@ class ClaudeChatProvider {
 	}
 
 	private async _sendMessageToClaude(message: string, planMode?: boolean, thinkingMode?: boolean) {
-		// Reset Claude usage limit processing flag for new request
-		this._claudeUsageLimitProcessed = false;
+		// Reset error state for new request
+		this._resetErrorState();
 		
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : process.cwd();
@@ -617,23 +631,7 @@ class ClaudeChatProvider {
 			});
 
 			if (code !== 0 && errorOutput.trim()) {
-				// Check if this is a Claude usage limit message and if it was already processed
-				if (errorOutput.trim().includes('Claude AI usage limit reached|') && this._claudeUsageLimitProcessed) {
-					// Skip processing if already handled
-					return;
-				}
-				
-				// Error with output - process for epoch timestamps
-				const processedError = this._processErrorMessage(errorOutput.trim());
-				this._sendAndSaveMessage({
-					type: 'error',
-					data: processedError
-				});
-				
-				// Mark as processed if it's a Claude usage limit message
-				if (errorOutput.trim().includes('Claude AI usage limit reached|')) {
-					this._claudeUsageLimitProcessed = true;
-				}
+				this._handleClaudeError(errorOutput.trim());
 			}
 		});
 
@@ -664,8 +662,8 @@ class ClaudeChatProvider {
 	}
 
 	private async _sendMessageWithImagesToClaude(message: string, images: any[], planMode?: boolean, thinkingMode?: boolean) {
-		// Reset Claude usage limit processing flag for new request
-		this._claudeUsageLimitProcessed = false;
+		// Reset error state for new request
+		this._resetErrorState();
 		
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		if (!workspaceFolder) {
@@ -751,8 +749,8 @@ class ClaudeChatProvider {
 	}
 
 	private async _sendMessageToClaudeWithoutUserDisplay(message: string, planMode?: boolean, thinkingMode?: boolean) {
-		// Reset Claude usage limit processing flag for new request
-		this._claudeUsageLimitProcessed = false;
+		// Reset error state for new request
+		this._resetErrorState();
 		
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : process.cwd();
@@ -928,23 +926,7 @@ class ClaudeChatProvider {
 			});
 
 			if (code !== 0 && errorOutput.trim()) {
-				// Check if this is a Claude usage limit message and if it was already processed
-				if (errorOutput.trim().includes('Claude AI usage limit reached|') && this._claudeUsageLimitProcessed) {
-					// Skip processing if already handled
-					return;
-				}
-				
-				// Error with output - process for epoch timestamps
-				const processedError = this._processErrorMessage(errorOutput.trim());
-				this._sendAndSaveMessage({
-					type: 'error',
-					data: processedError
-				});
-				
-				// Mark as processed if it's a Claude usage limit message
-				if (errorOutput.trim().includes('Claude AI usage limit reached|')) {
-					this._claudeUsageLimitProcessed = true;
-				}
+				this._handleClaudeError(errorOutput.trim());
 			}
 		});
 
@@ -1010,26 +992,19 @@ class ClaudeChatProvider {
 					for (const content of jsonData.message.content) {
 						if (content.type === 'text' && content.text.trim()) {
 						// Check if this is a Claude usage limit message that should be processed as error
-						const textContent = content.text.trim();
-						if (textContent.includes('Claude AI usage limit reached|')) {
-							// Check if already processed to prevent duplicates
-							if (this._claudeUsageLimitProcessed) {
-								continue; // Skip if already processed
-							}
-							// Process as error message instead of output
-							const processedError = this._processErrorMessage(textContent);
-							this._sendAndSaveMessage({
-								type: 'error',
-								data: processedError
-							});
-							this._claudeUsageLimitProcessed = true;
-						} else {
-							// Show normal text content and save to conversation
-							this._sendAndSaveMessage({
-								type: 'output',
-								data: textContent
-							});
-						}
+				const textContent = content.text.trim();
+				if (textContent.includes(ClaudeChatProvider.CLAUDE_USAGE_LIMIT_PATTERN)) {
+					// Use centralized error handler
+					if (!this._handleClaudeError(textContent)) {
+						continue; // Skip if already processed
+					}
+				} else {
+					// Show normal text content and save to conversation
+					this._sendAndSaveMessage({
+						type: 'output',
+						data: textContent
+					});
+				}
 						} else if (content.type === 'thinking' && content.thinking.trim()) {
 							// Show thinking content and save to conversation
 							this._sendAndSaveMessage({
@@ -1122,15 +1097,12 @@ class ClaudeChatProvider {
 						return;
 					}
 
-					// Handle other errors with epoch conversion (skip if Claude usage limit already processed)
-				if (jsonData.is_error && jsonData.result && !this._claudeUsageLimitProcessed) {
-					const processedError = this._processErrorMessage(jsonData.result);
-					this._sendAndSaveMessage({
-						type: 'error',
-						data: processedError
-					});
+					// Handle other errors with centralized error handler
+			if (jsonData.is_error && jsonData.result) {
+				if (this._handleClaudeError(jsonData.result)) {
 					return;
 				}
+			}
 
 					// Capture session ID from final result
 					if (jsonData.session_id) {
@@ -1203,8 +1175,8 @@ class ClaudeChatProvider {
 		this._currentConversation = [];
 		this._conversationStartTime = undefined;
 		
-		// Reset Claude usage limit processing flag
-		this._claudeUsageLimitProcessed = false;
+		// Reset error state
+		this._resetErrorState();
 
 		// Reset counters
 		this._totalCost = 0;
@@ -1827,10 +1799,96 @@ class ClaudeChatProvider {
 		}
 	}
 
+	/**
+	 * Centralized error handler for Claude errors
+	 * @param errorMessage The error message to process
+	 * @returns true if error was processed, false if skipped due to duplicate
+	 */
+	private _handleClaudeError(errorMessage: string): boolean {
+		// Classify the error type
+		const errorType = this._classifyErrorType(errorMessage);
+		
+		// Check if this error type has already been processed
+		if (errorType !== ClaudeErrorType.None && this._hasErrorBeenProcessed(errorType)) {
+			// Skip processing if already handled
+			return false;
+		}
+
+		// Process the error message for epoch timestamps
+		const processedError = this._processErrorMessage(errorMessage);
+		
+		// Send the error message
+		this._sendAndSaveMessage({
+			type: 'error',
+			data: processedError
+		});
+
+		// Mark the error type as processed
+		if (errorType !== ClaudeErrorType.None) {
+			this._markErrorAsProcessed(errorType);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Classifies error messages into specific error types
+	 * @param errorMessage The error message to classify
+	 * @returns The detected error type
+	 */
+	private _classifyErrorType(errorMessage: string): ClaudeErrorType {
+		// Check for Claude usage limit errors
+		if (errorMessage.includes(ClaudeChatProvider.CLAUDE_USAGE_LIMIT_PATTERN)) {
+			return ClaudeErrorType.UsageLimit;
+		}
+		
+		// Check for network-related errors
+		if (errorMessage.toLowerCase().includes('network') || 
+			errorMessage.toLowerCase().includes('connection') ||
+			errorMessage.toLowerCase().includes('timeout') ||
+			errorMessage.toLowerCase().includes('unreachable')) {
+			return ClaudeErrorType.NetworkError;
+		}
+		
+		// Check for authentication errors
+		if (errorMessage.toLowerCase().includes('auth') ||
+			errorMessage.toLowerCase().includes('unauthorized') ||
+			errorMessage.toLowerCase().includes('forbidden') ||
+			errorMessage.toLowerCase().includes('invalid api key')) {
+			return ClaudeErrorType.AuthError;
+		}
+		
+		// Default to None for unrecognized errors
+		return ClaudeErrorType.None;
+	}
+
+	/**
+	 * Checks if a specific error type has been processed
+	 * @param errorType The error type to check
+	 * @returns true if the error has been processed, false otherwise
+	 */
+	private _hasErrorBeenProcessed(errorType: ClaudeErrorType): boolean {
+		return this._processedErrors.has(errorType);
+	}
+
+	/**
+	 * Marks a specific error type as processed
+	 * @param errorType The error type to mark as processed
+	 */
+	private _markErrorAsProcessed(errorType: ClaudeErrorType): void {
+		this._processedErrors.add(errorType);
+	}
+
+	/**
+	 * Resets the error state, clearing all processed error flags
+	 */
+	private _resetErrorState(): void {
+		this._processedErrors.clear();
+	}
+
 	private _processErrorMessage(errorMessage: string): string {
 		// Look for Claude usage limit messages with epoch timestamps
-		const usageLimitRegex = /Claude AI usage limit reached\|(\d{10})/;
-		const match = errorMessage.match(usageLimitRegex);
+		const match = errorMessage.match(ClaudeChatProvider.CLAUDE_USAGE_LIMIT_REGEX);
 		
 		if (match) {
 			try {
