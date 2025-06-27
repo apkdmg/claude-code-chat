@@ -152,7 +152,7 @@ const styles = `
     }
 
     .message {
-        margin-bottom: 12px;
+        margin-bottom: 8px;
         padding: 12px 16px;
         border-radius: 8px;
         border: 1px solid transparent;
@@ -161,44 +161,39 @@ const styles = `
         backdrop-filter: blur(0.5px);
     }
 
-    .message:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+
+    .message.user:hover {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.12);
     }
 
     .message.user {
-        background: rgba(64, 165, 255, 0.04);
-        border: 1px solid rgba(64, 165, 255, 0.15);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         color: var(--vscode-editor-foreground);
         font-family: var(--vscode-editor-font-family);
+        margin-bottom: 12px;
+        box-shadow: none;
+        position: relative;
+        padding: 8px 12px;
+        margin-left: 50px;
     }
 
     .message.user::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 3px;
-        background: linear-gradient(180deg, #40a5ff 0%, #0078d4 100%);
-        border-radius: 0 0 0 8px;
+        display: none;
     }
 
     .message.claude {
-        background: rgba(46, 204, 113, 0.03);
-        border: 1px solid rgba(46, 204, 113, 0.1);
+        background: transparent;
+        border: none;
         color: var(--vscode-editor-foreground);
+        padding: 4px 0;
+        margin-bottom: 12px;
     }
 
     .message.claude::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 3px;
-        background: linear-gradient(180deg, #2ecc71 0%, #27ae60 100%);
-        border-radius: 0 0 0 8px;
+        display: none;
     }
 
     .message.error {
@@ -224,67 +219,73 @@ const styles = `
         border: none;
         color: var(--vscode-descriptionForeground);
         font-style: normal;
-        font-size: 11px;
-        opacity: 0.6;
-        padding: 4px 8px;
-        margin: 4px 0;
-        text-align: center;
-        font-weight: 400;
+        font-size: 8px;
+        opacity: 0.25;
+        padding: 0;
+        margin: 0;
+        text-align: right;
+        font-weight: 300;
         animation: fadeInSubtle 0.3s ease-in;
         transition: opacity 0.2s ease;
+        font-family: var(--vscode-editor-font-family);
+        letter-spacing: 0.1px;
+        line-height: 1;
+        min-height: 10px;
+        max-height: 10px;
+        overflow: hidden;
     }
 
     .message.system:hover {
-        opacity: 0.8;
+        opacity: 0.6;
+    }
+
+    .message.loading-message {
+        font-size: 10px;
+        opacity: 0.4;
+        text-align: center;
+        color: var(--vscode-descriptionForeground);
+        margin: 2px 0;
+        padding: 2px;
+        font-style: italic;
     }
 
     @keyframes fadeInSubtle {
         from {
             opacity: 0;
-            transform: translateY(5px);
+            transform: translateY(2px);
         }
         to {
-            opacity: 0.6;
+            opacity: 0.25;
             transform: translateY(0);
         }
     }
 
     .message.tool {
-        border: 1px solid rgba(120, 139, 237, 0.12);
-        border-radius: 8px;
+        background: rgba(120, 139, 237, 0.04);
+        border: 1px solid rgba(120, 139, 237, 0.1);
+        border-radius: 6px;
         color: var(--vscode-editor-foreground);
-        position: relative;
-        overflow: hidden;
+        margin-bottom: 8px;
+        padding: 8px 12px;
     }
 
     .message.tool::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 4px;
-        background: linear-gradient(180deg, #7c8bed 0%, #5d6fe1 100%);
+        display: none;
     }
 
     .message.tool-result {
-        border: 1px solid rgba(28, 192, 140, 0.2);
-        border-radius: 8px;
+        background: rgba(28, 192, 140, 0.04);
+        border: 1px solid rgba(28, 192, 140, 0.1);
+        border-radius: 6px;
         color: var(--vscode-editor-foreground);
         font-family: var(--vscode-editor-font-family);
         white-space: pre-wrap;
-        position: relative;
-        overflow: hidden;
+        margin-bottom: 8px;
+        padding: 8px 12px;
     }
 
     .message.tool-result::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 4px;
-        background: linear-gradient(180deg, #1cc08c 0%, #16a974 100%);
+        display: none;
     }
 
     .message.thinking {
@@ -349,28 +350,52 @@ const styles = `
         position: relative;
     }
 
+    .message.user .message-header {
+        position: absolute;
+        top: 8px;
+        left: -40px;
+        border-bottom: none;
+        padding: 0;
+        margin: 0;
+        background: transparent;
+        z-index: 1;
+        width: 30px;
+    }
+
     .copy-btn {
         background: transparent;
         border: none;
         color: var(--vscode-descriptionForeground);
         cursor: pointer;
-        padding: 2px;
-        border-radius: 3px;
+        padding: 4px 6px;
+        border-radius: 4px;
         opacity: 0;
-        transition: opacity 0.2s ease;
+        transition: all 0.2s ease;
         margin-left: auto;
         display: flex;
         align-items: center;
         justify-content: center;
+        font-size: 12px;
     }
 
-    .message:hover .copy-btn {
-        opacity: 0.7;
+    .message.user:hover .copy-btn,
+    .message.claude:hover .copy-btn {
+        opacity: 0.6;
+    }
+
+    .message.user .copy-btn {
+        position: absolute;
+        top: -2px;
+        right: 0px;
+        background: var(--vscode-editor-background);
+        border-radius: 3px;
+        padding: 2px 4px;
     }
 
     .copy-btn:hover {
         opacity: 1;
         background-color: var(--vscode-list-hoverBackground);
+        transform: scale(1.05);
     }
 
     .message-icon {
@@ -385,6 +410,10 @@ const styles = `
         font-weight: 600;
         flex-shrink: 0;
         margin-left: 0;
+    }
+
+    .message.user .message-icon {
+        display: none;
     }
 
     .message-icon.user {
@@ -411,8 +440,37 @@ const styles = `
         letter-spacing: 0.8px;
     }
 
+    .message.user .message-label {
+        font-size: 10px;
+        font-weight: 600;
+        opacity: 0.9;
+        text-transform: none;
+        letter-spacing: 0;
+        color: var(--vscode-descriptionForeground);
+        padding: 4px 6px;
+        background: transparent;
+        border: 1px solid var(--vscode-descriptionForeground);
+        border-radius: 50%;
+        text-align: center;
+        white-space: nowrap;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
     .message-content {
         padding-left: 6px;
+    }
+
+    .message.user .message-content {
+        padding: 0;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        margin: 0;
+        margin-left: 0;
     }
 
     .priority-badge {
@@ -1699,40 +1757,36 @@ const styles = `
     }
 
     .restore-container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px
+        display: none;
     }
 
-    .restore-btn {
-        background-color: var(--vscode-button-background);
-        color: var(--vscode-button-foreground);
-        border: none;
-        padding: 4px 10px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
-    }
-
-    .restore-btn.dark {
-        background-color: #2d2d30;
-        color: #999999;
-    }
-
-    .restore-btn:hover {
-        background-color: var(--vscode-button-hoverBackground);
-    }
-
-    .restore-btn.dark:hover {
-        background-color: #3e3e42;
-    }
-
-    .restore-date {
-        font-size: 10px;
+    .revert-btn {
+        position: absolute;
+        bottom: 6px;
+        right: 8px;
+        background: rgba(255, 255, 255, 0.06);
         color: var(--vscode-descriptionForeground);
-        opacity: 0.8;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 3px 6px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 9px;
+        font-weight: 500;
+        opacity: 0;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
+
+    .message.user:hover .revert-btn {
+        opacity: 1;
+    }
+
+    .revert-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: var(--vscode-foreground);
     }
 
     .conversation-history {

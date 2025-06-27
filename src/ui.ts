@@ -537,8 +537,8 @@ const html = `<!DOCTYPE html>
 				// Set icon and label based on type
 				switch(type) {
 					case 'user':
-						iconDiv.textContent = '👤';
-						labelDiv.textContent = 'You';
+						iconDiv.textContent = '';
+						labelDiv.textContent = 'Me';
 						break;
 					case 'claude':
 						iconDiv.textContent = '🤖';
@@ -559,6 +559,9 @@ const html = `<!DOCTYPE html>
 				
 				headerDiv.appendChild(iconDiv);
 				headerDiv.appendChild(labelDiv);
+				
+				// Revert button will be added later outside header for user messages
+				
 				headerDiv.appendChild(copyBtn);
 				messageDiv.appendChild(headerDiv);
 			}
@@ -576,6 +579,22 @@ const html = `<!DOCTYPE html>
 			}
 			
 			messageDiv.appendChild(contentDiv);
+			
+			// Add revert button for user messages (positioned at bottom right)
+			if (type === 'user') {
+				const revertBtn = document.createElement('button');
+				revertBtn.className = 'revert-btn';
+				revertBtn.title = 'Revert to this point';
+				revertBtn.textContent = 'Revert';
+				// The onclick will be set later when restore data is available
+				revertBtn.onclick = () => {
+					if (revertBtn.dataset.commitSha) {
+						restoreToCommit(revertBtn.dataset.commitSha);
+					}
+				};
+				messageDiv.appendChild(revertBtn);
+			}
+			
 			messagesDiv.appendChild(messageDiv);
 			messagesDiv.scrollTop = messagesDiv.scrollHeight;
 		}
@@ -1662,7 +1681,12 @@ const html = `<!DOCTYPE html>
 					break;
 					
 				case 'loading':
-					addMessage(message.data, 'system');
+					// Add loading message with special class for easier removal
+					const loadingDiv = document.createElement('div');
+					loadingDiv.className = 'message system loading-message';
+					loadingDiv.textContent = message.data;
+					messagesDiv.appendChild(loadingDiv);
+					messagesDiv.scrollTop = messagesDiv.scrollHeight;
 					updateStatusWithTotals();
 					break;
 					
@@ -1681,14 +1705,9 @@ const html = `<!DOCTYPE html>
 					break;
 					
 				case 'clearLoading':
-					// Remove the last loading message
-					const messages = messagesDiv.children;
-					if (messages.length > 0) {
-						const lastMessage = messages[messages.length - 1];
-						if (lastMessage.classList.contains('system')) {
-							lastMessage.remove();
-						}
-					}
+					// Remove all loading messages
+					const loadingMessages = messagesDiv.querySelectorAll('.loading-message');
+					loadingMessages.forEach(message => message.remove());
 					updateStatusWithTotals();
 					break;
 					
@@ -1878,22 +1897,25 @@ const html = `<!DOCTYPE html>
 		}
 
 		function showRestoreContainer(data) {
+			// Find the last user message and add the restore data to its revert button
+			const userMessages = messagesDiv.querySelectorAll('.message.user');
+			const lastUserMessage = userMessages[userMessages.length - 1];
+			
+			if (lastUserMessage) {
+				const revertBtn = lastUserMessage.querySelector('.revert-btn');
+				if (revertBtn) {
+					// Store the commit SHA in the button data
+					revertBtn.dataset.commitSha = data.sha;
+					revertBtn.onclick = () => restoreToCommit(data.sha);
+				}
+			}
+			
+			// Create a hidden container for compatibility but don't show it
 			const restoreContainer = document.createElement('div');
 			restoreContainer.className = 'restore-container';
 			restoreContainer.id = \`restore-\${data.sha}\`;
-			
-			const timeAgo = new Date(data.timestamp).toLocaleTimeString();
-			const shortSha = data.sha ? data.sha.substring(0, 8) : 'unknown';
-			
-			restoreContainer.innerHTML = \`
-				<button class="restore-btn dark" onclick="restoreToCommit('\${data.sha}')">
-					Restore checkpoint
-				</button>
-				<span class="restore-date">\${timeAgo}</span>
-			\`;
-			
+			restoreContainer.style.display = 'none';
 			messagesDiv.appendChild(restoreContainer);
-			messagesDiv.scrollTop = messagesDiv.scrollHeight;
 		}
 
 		function hideRestoreContainer(commitSha) {
