@@ -11,23 +11,6 @@ const styles = `
         flex-direction: column;
     }
 
-    .header {
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--vscode-panel-border);
-        background-color: var(--vscode-panel-background);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .header h2 {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 500;
-        color: var(--vscode-foreground);
-        letter-spacing: -0.3px;
-    }
-
     .controls {
         display: flex;
         gap: 6px;
@@ -1517,6 +1500,99 @@ const styles = `
     }
 
     /* Markdown content styles */
+    
+    /* Code block styles - using monospace font and distinct background */
+    .message-content pre {
+        background-color: var(--vscode-textCodeBlock-background);
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 6px;
+        padding: 12px;
+        margin: 8px 0;
+        font-family: var(--vscode-editor-font-family);
+        font-size: var(--vscode-editor-font-size);
+        line-height: 1.4;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    
+    .message-content pre code {
+        background: none;
+        border: none;
+        padding: 0;
+        font-family: inherit;
+        font-size: inherit;
+        color: var(--vscode-editor-foreground);
+    }
+    
+    /* Inline code styles - using monospace font with subtle background */
+    .message-content code {
+        background-color: var(--vscode-textCodeBlock-background);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        padding: 2px 4px;
+        font-family: var(--vscode-editor-font-family);
+        font-size: calc(var(--vscode-editor-font-size) * 0.9);
+        color: var(--vscode-textPreformat-foreground);
+        white-space: pre-wrap;
+    }
+    
+    /* Regular text content uses system font for better readability */
+    .message-content {
+        font-family: var(--vscode-font-family);
+        font-size: var(--vscode-font-size);
+        line-height: 1.6;
+        color: var(--vscode-foreground);
+    }
+    
+    /* Paragraphs and general text content */
+    .message-content p {
+        margin: 8px 0;
+        font-family: var(--vscode-font-family);
+        font-size: var(--vscode-font-size);
+        line-height: 1.6;
+    }
+    
+    /* Headers should use system font but with appropriate sizing */
+    .message-content h1, 
+    .message-content h2, 
+    .message-content h3, 
+    .message-content h4, 
+    .message-content h5, 
+    .message-content h6 {
+        font-family: var(--vscode-font-family);
+        font-weight: 600;
+        margin: 16px 0 8px 0;
+        color: var(--vscode-foreground);
+    }
+    
+    .message-content h1 { font-size: 1.5em; }
+    .message-content h2 { font-size: 1.3em; }
+    .message-content h3 { font-size: 1.1em; }
+    .message-content h4 { font-size: 1em; }
+    
+    /* Lists should use system font */
+    .message-content ul, 
+    .message-content ol {
+        font-family: var(--vscode-font-family);
+        font-size: var(--vscode-font-size);
+        line-height: 1.6;
+        margin: 8px 0;
+        padding-left: 20px;
+    }
+    
+    .message-content li {
+        margin: 4px 0;
+    }
+    
+    /* Bold and italic should maintain font family but adjust weight/style */
+    .message-content strong {
+        font-weight: 600;
+    }
+    
+    .message-content em {
+        font-style: italic;
+    }
     .message h1, .message h2, .message h3, .message h4 {
         margin: 0.8em 0 0.4em 0;
         font-weight: 600;

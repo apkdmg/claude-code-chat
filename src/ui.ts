@@ -8,22 +8,6 @@ const html = `<!DOCTYPE html>
 	${styles}
 </head>
 <body>
-	<div class="header">
-		<div style="display: flex; align-items: center;">
-			<h2>Claude Code Chat</h2>
-			<!-- <div id="sessionInfo" class="session-badge" style="display: none;">
-				<span class="session-icon">💬</span>
-				<span id="sessionId">-</span>
-				<span class="session-label">session</span>
-			</div> -->
-		</div>
-		<div style="display: flex; gap: 8px; align-items: center;">
-			<div id="sessionStatus" class="session-status" style="display: none;">No session</div>
-			<button class="btn outlined" id="settingsBtn" onclick="toggleSettings()" title="Settings">⚙️</button>
-			<button class="btn outlined" id="historyBtn" onclick="toggleConversationHistory()" style="display: none;">📚 History</button>
-			<button class="btn primary" id="newSessionBtn" onclick="newSession()" style="display: none;">New Chat</button>
-		</div>
-	</div>
 	
 	<div id="conversationHistory" class="conversation-history" style="display: none;">
 		<div class="conversation-header">
@@ -1866,11 +1850,17 @@ const html = `<!DOCTYPE html>
 					selectModel(message.model, true);
 					break;
 				case 'terminalOpened':
-					// Display notification about checking the terminal
-					addMessage(message.data, 'system');
-					break;
-			}
-		});
+				// Display notification about checking the terminal
+				addMessage(message.data, 'system');
+				break;
+			case 'toggleSettings':
+				toggleSettings();
+				break;
+			case 'toggleHistory':
+				toggleConversationHistory();
+				break;
+		}
+	});
 		
 		// Session management functions
 		function newSession() {
@@ -1976,6 +1966,9 @@ const html = `<!DOCTYPE html>
 
 			for (let line of lines) {
 				line = line.trim();
+
+				// Inline code (backticks) - process first to avoid conflicts
+				line = line.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
 
 				// Bold
 				line = line.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');

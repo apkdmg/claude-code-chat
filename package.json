@@ -57,6 +57,36 @@
         "title": "Open Claude Code Chat",
         "category": "Claude Code Chat",
         "icon": "icon.png"
+      },
+      {
+        "command": "claude-code-chat.loadConversation",
+        "title": "Load Conversation",
+        "category": "Claude Code Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "claude-code-chat.newSession",
+        "title": "New Chat Session",
+        "category": "Claude Code Chat",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claude-code-chat.refreshHistory",
+        "title": "Refresh Conversation History",
+        "category": "Claude Code Chat",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claude-code-chat.toggleSettings",
+        "title": "Toggle Settings",
+        "category": "Claude Code Chat",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "claude-code-chat.toggleHistory",
+        "title": "Toggle History",
+        "category": "Claude Code Chat",
+        "icon": "$(history)"
       }
     ],
     "keybindings": [
@@ -110,6 +140,26 @@
           "command": "claude-code-chat.openChat",
           "group": "navigation@1",
           "when": "view == workbench.explorer.fileView"
+        },
+        {
+          "command": "claude-code-chat.newSession",
+          "group": "navigation@1",
+          "when": "view == claude-code-chat.chatView"
+        },
+        {
+          "command": "claude-code-chat.toggleHistory",
+          "group": "navigation@2",
+          "when": "view == claude-code-chat.chatView"
+        },
+        {
+          "command": "claude-code-chat.toggleSettings",
+          "group": "navigation@3",
+          "when": "view == claude-code-chat.chatView"
+        },
+        {
+          "command": "claude-code-chat.refreshHistory",
+          "group": "navigation@1",
+          "when": "view == claude-code-chat.history"
         }
       ],
       "touchBar": [
@@ -124,16 +174,30 @@
           "command": "claude-code-chat.openChat",
           "group": "1_new@1"
         }
+      ],
+      "view/item/context": [
+        {
+          "command": "claude-code-chat.loadConversation",
+          "when": "view == claude-code-chat.history && viewItem == conversation",
+          "group": "inline"
+        }
       ]
     },
     "views": {
       "claude-code-chat": [
         {
-          "id": "claude-code-chat.chat",
-          "name": "Claude Code Chat",
+          "type": "webview",
+          "id": "claude-code-chat.chatView",
+          "name": "Chat",
           "when": "true",
           "icon": "icon.png",
           "contextualTitle": "Claude Code Chat"
+        },
+        {
+          "id": "claude-code-chat.history",
+          "name": "Conversation History",
+          "when": "true",
+          "icon": "$(history)"
         }
       ]
     },
