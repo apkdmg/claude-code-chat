@@ -269,6 +269,14 @@ const styles = `
         padding: 8px 12px;
     }
 
+    .message.tool-read-compact {
+        padding: 3px 20px 3px 0px;
+        margin: 0px 0;
+        border-radius: 6px;
+        background: transparent;
+        border: none;
+    }
+
     .message.tool::before {
         display: none;
     }
@@ -338,6 +346,51 @@ const styles = `
         font-size: 12px;
         color: var(--vscode-editor-foreground);
         opacity: 0.85;
+    }
+
+    .tool-compact-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        // background-color: var(--vscode-badge-background, #4a4a4a);
+        border: 1px solid rgba(var(--vscode-badge-foreground-rgb, 204, 204, 204), 0.3);
+        border-radius: 6px;
+        font-size: 11px;
+        line-height: 1;
+        width: 100%;
+        opacity: 0.7;
+    }
+
+    .tool-icon-pill {
+        font-size: 10px;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+
+    .tool-label-pill {
+        font-weight: 500;
+        color: var(--vscode-badge-foreground, #cccccc);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .tool-file-pill {
+        font-weight: 400;
+        color: var(--vscode-textLink-foreground);
+        cursor: pointer;
+        text-decoration: none;
+        border-radius: 6px;
+        padding: 1px 3px;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        background-color: rgba(255, 255, 255, 0.00);
+    }
+
+    .tool-file-pill:hover {
+        background-color: var(--vscode-list-hoverBackground);
+        color: var(--vscode-textLink-activeForeground);
+        text-decoration: none;
     }
 
     .message-header {
@@ -845,6 +898,110 @@ const styles = `
         color: var(--vscode-input-placeholderForeground);
         border: none;
         outline: none;
+    }
+
+    /* Image Attachments */
+    .image-attachments {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 12px;
+        background-color: var(--vscode-input-background);
+        border-bottom: 1px solid var(--vscode-panel-border);
+        max-height: 120px;
+        overflow-y: auto;
+    }
+
+    .image-thumbnail {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 2px solid var(--vscode-panel-border);
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+    .image-thumbnail:hover {
+        border-color: var(--vscode-focusBorder);
+        transform: scale(1.05);
+    }
+
+    .image-thumbnail img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .image-thumbnail-delete {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 16px;
+        height: 16px;
+        background-color: var(--vscode-errorForeground);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: bold;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        z-index: 1;
+    }
+
+    .image-thumbnail:hover .image-thumbnail-delete {
+        opacity: 1;
+    }
+
+    .image-thumbnail-delete:hover {
+        background-color: var(--vscode-errorForeground);
+        transform: scale(1.1);
+    }
+
+    /* Drag and Drop */
+    .textarea-container.drag-over {
+        background-color: rgba(14, 99, 156, 0.1);
+        border: 2px dashed var(--vscode-focusBorder);
+        border-radius: 6px;
+    }
+
+    .drag-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(14, 99, 156, 0.15);
+        border: 3px dashed var(--vscode-focusBorder);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--vscode-focusBorder);
+        font-weight: 600;
+        font-size: 16px;
+        z-index: 1000;
+        pointer-events: none;
+        backdrop-filter: blur(2px);
+        animation: dragPulse 1s ease-in-out infinite alternate;
+    }
+
+    @keyframes dragPulse {
+        from {
+            border-color: var(--vscode-focusBorder);
+            background-color: rgba(14, 99, 156, 0.1);
+        }
+        to {
+            border-color: var(--vscode-button-background);
+            background-color: rgba(14, 99, 156, 0.2);
+        }
     }
 
     .input-controls {

@@ -48,7 +48,12 @@ const html = `<!DOCTYPE html>
 					<div class="mode-switch" id="thinkingModeSwitch" onclick="toggleThinkingMode()"></div>
 				</div>
 			</div>
-			<div class="textarea-container">
+			<div class="textarea-container" id="textareaContainer">
+				<!-- Image attachments container -->
+				<div class="image-attachments" id="imageAttachments" style="display: none;">
+					<!-- Image thumbnails will be added here dynamically -->
+				</div>
+				
 				<div class="textarea-wrapper">
 					<textarea class="input-field" id="messageInput" placeholder="Type your message to Claude Code..." rows="1"></textarea>
 					<div class="input-controls">
@@ -599,33 +604,151 @@ const html = `<!DOCTYPE html>
 			messagesDiv.scrollTop = messagesDiv.scrollHeight;
 		}
 
+		function addUserMessageWithImages(text, images) {
+			const messageDiv = document.createElement('div');
+			messageDiv.className = 'message user';
+			
+			// Add header for user message
+			const headerDiv = document.createElement('div');
+			headerDiv.className = 'message-header';
+			
+			const iconDiv = document.createElement('div');
+			iconDiv.className = 'message-icon user';
+			iconDiv.textContent = '';
+			
+			const labelDiv = document.createElement('div');
+			labelDiv.className = 'message-label';
+			labelDiv.textContent = 'Me';
+			
+			headerDiv.appendChild(iconDiv);
+			headerDiv.appendChild(labelDiv);
+			messageDiv.appendChild(headerDiv);
+			
+			// Create content div
+			const contentDiv = document.createElement('div');
+			contentDiv.className = 'message-content';
+			
+			// Add text content if present
+			if (text && text.trim()) {
+				const textDiv = document.createElement('div');
+				textDiv.className = 'message-text';
+				textDiv.textContent = text;
+				contentDiv.appendChild(textDiv);
+			}
+			
+			// Add image thumbnails if present
+			if (images && images.length > 0) {
+				const imagesDiv = document.createElement('div');
+				imagesDiv.className = 'message-images';
+				imagesDiv.style.cssText = \`
+					display: flex;
+					flex-wrap: wrap;
+					gap: 8px;
+					margin-top: 8px;
+				\`;
+				
+				images.forEach(img => {
+					const imgContainer = document.createElement('div');
+					imgContainer.style.cssText = \`
+						position: relative;
+						width: 80px;
+						height: 80px;
+						border-radius: 6px;
+						overflow: hidden;
+						border: 2px solid var(--vscode-panel-border);
+					\`;
+					
+					const imgElement = document.createElement('img');
+					imgElement.src = img.dataUrl;
+					imgElement.alt = img.name;
+					imgElement.style.cssText = \`
+						width: 100%;
+						height: 100%;
+						object-fit: cover;
+						display: block;
+					\`;
+					
+					// Add filename tooltip
+					imgElement.title = img.name;
+					
+					imgContainer.appendChild(imgElement);
+					imagesDiv.appendChild(imgContainer);
+				});
+				
+				contentDiv.appendChild(imagesDiv);
+			}
+			
+			messageDiv.appendChild(contentDiv);
+			
+			// Add revert button for user messages
+			const revertBtn = document.createElement('button');
+			revertBtn.className = 'revert-btn';
+			revertBtn.title = 'Revert to this point';
+			revertBtn.textContent = 'Revert';
+			revertBtn.onclick = () => {
+				if (revertBtn.dataset.commitSha) {
+					restoreToCommit(revertBtn.dataset.commitSha);
+				}
+			};
+			messageDiv.appendChild(revertBtn);
+			
+			messagesDiv.appendChild(messageDiv);
+			messagesDiv.scrollTop = messagesDiv.scrollHeight;
+		}
 
 		function addToolUseMessage(data) {
 			const messageDiv = document.createElement('div');
 			messageDiv.className = 'message tool';
 			
-			// Create modern header with icon
-			const headerDiv = document.createElement('div');
-			headerDiv.className = 'tool-header';
-			
-			const iconDiv = document.createElement('div');
-			iconDiv.className = 'tool-icon';
-			iconDiv.textContent = '🔧';
-			
-			const toolInfoElement = document.createElement('div');
-			toolInfoElement.className = 'tool-info';
 			let toolName = data.toolInfo.replace('🔧 Executing: ', '');
 			// Replace TodoWrite with more user-friendly name
 			if (toolName === 'TodoWrite') {
 				toolName = 'Update Todos';
 			}
-			toolInfoElement.textContent = toolName;
 			
-			headerDiv.appendChild(iconDiv);
-			headerDiv.appendChild(toolInfoElement);
-			messageDiv.appendChild(headerDiv);
+			// For Read tool, create compact pill-like layout matching reference design
+			if (toolName === 'Read' && data.rawInput && data.rawInput.file_path) {
+				const compactDiv = document.createElement('div');
+				compactDiv.className = 'tool-compact-pill';
+				
+				const iconDiv = document.createElement('div');
+				iconDiv.className = 'tool-icon-pill';
+				iconDiv.textContent = '✅';
+				
+				const labelDiv = document.createElement('div');
+				labelDiv.className = 'tool-label-pill';
+				labelDiv.textContent = 'Analyzed';
+				
+				const filePathDiv = document.createElement('div');
+				filePathDiv.className = 'tool-file-pill';
+				filePathDiv.innerHTML = formatFilePath(data.rawInput.file_path);
+				filePathDiv.onclick = () => openFileInEditor(data.rawInput.file_path);
+				
+				compactDiv.appendChild(iconDiv);
+				compactDiv.appendChild(labelDiv);
+				compactDiv.appendChild(filePathDiv);
+				messageDiv.appendChild(compactDiv);
+				messageDiv.classList.add('tool-read-compact');
+			} else {
+				// Create modern header with icon for other tools
+				const headerDiv = document.createElement('div');
+				headerDiv.className = 'tool-header';
+				
+				const iconDiv = document.createElement('div');
+				iconDiv.className = 'tool-icon';
+				iconDiv.textContent = '🔧';
+				
+				const toolInfoElement = document.createElement('div');
+				toolInfoElement.className = 'tool-info';
+				toolInfoElement.textContent = toolName;
+				
+				headerDiv.appendChild(iconDiv);
+				headerDiv.appendChild(toolInfoElement);
+				messageDiv.appendChild(headerDiv);
+			}
 			
-			if (data.rawInput) {
+			// Skip input content display for Read tool since file path is already shown in compact header
+			if (data.rawInput && toolName !== 'Read') {
 				const inputElement = document.createElement('div');
 				inputElement.className = 'tool-input';
 				
@@ -1135,15 +1258,28 @@ const html = `<!DOCTYPE html>
 
 		function sendMessage() {
 			const text = messageInput.value.trim();
-			if (text) {
+			
+			// Get attached images
+			const attachedImageData = attachedImages.slice(); // Copy array
+			
+			// Only send if there's text or images
+			if (text || attachedImageData.length > 0) {
+				// Display user message with thumbnails in chat before sending
+				addUserMessageWithImages(text, attachedImageData);
+				
+				// Send message with image data for backend processing
 				vscode.postMessage({
-					type: 'sendMessage',
+					type: 'sendMessageWithImages',
 					text: text,
+					images: attachedImageData,
 					planMode: planModeEnabled,
 					thinkingMode: thinkingModeEnabled
 				});
 				
+				// Clear the input and image attachments
 				messageInput.value = '';
+				clearAllImageAttachments();
+				adjustTextareaHeight();
 			}
 		}
 
@@ -1352,6 +1488,9 @@ const html = `<!DOCTYPE html>
 
 		// Initialize textarea height
 		adjustTextareaHeight();
+
+		// Setup drag and drop for images
+		setupDragAndDrop();
 
 		// File picker event listeners
 		fileSearchInput.addEventListener('input', (e) => {
@@ -1849,12 +1988,26 @@ const html = `<!DOCTYPE html>
 					break;
 					
 				case 'imagePath':
-					// Add the image path to the textarea
-					const currentText = messageInput.value;
-					const pathIndicator = \`@\${message.path} \`;
-					messageInput.value = currentText + pathIndicator;
+					// Legacy handler - convert to new format
+					addImageThumbnail({
+						path: message.path,
+						name: message.path.split('/').pop() || 'image',
+						dataUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMwIiB5PSIzNSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5JbWFnZTwvdGV4dD4KPHN2Zz4=', // placeholder
+						isSelected: true,
+						isDropped: false
+					});
 					messageInput.focus();
-					adjustTextareaHeight();
+					break;
+
+				case 'imageData':
+					// New handler for image data with thumbnails
+					addImageThumbnail(message);
+					messageInput.focus();
+					break;
+
+				case 'imageError':
+					// Show error feedback
+					showImageAddedFeedback(message.message);
 					break;
 					
 				case 'conversationList':
@@ -2224,6 +2377,281 @@ const html = `<!DOCTYPE html>
 				feedback.style.opacity = '0';
 				setTimeout(() => feedback.remove(), 300);
 			}, 2000);
+		}
+
+		// Image attachment management
+		let attachedImages = [];
+
+		function addImageThumbnail(imageData) {
+			// Standardized image data structure
+			const standardizedData = {
+				id: Date.now() + Math.random(), // Unique identifier
+				path: imageData.path || imageData.name,
+				name: imageData.name,
+				dataUrl: imageData.dataUrl,
+				isSelected: imageData.isSelected || false,
+				isDropped: imageData.isDropped || false
+			};
+
+			// Add to attached images array
+			attachedImages.push(standardizedData);
+
+			// Show the image attachments container
+			const container = document.getElementById('imageAttachments');
+			container.style.display = 'flex';
+
+			// Create thumbnail element
+			const thumbnail = document.createElement('div');
+			thumbnail.className = 'image-thumbnail';
+			thumbnail.dataset.imageId = standardizedData.id;
+
+			// Create image element
+			const img = document.createElement('img');
+			img.src = standardizedData.dataUrl;
+			img.alt = standardizedData.name;
+			img.onerror = function() {
+				// Fallback to a placeholder if image can't be loaded
+				this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjMwIiB5PSIzNSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5JbWFnZTwvdGV4dD4KPHN2Zz4=';
+			};
+
+			// Create delete button
+			const deleteBtn = document.createElement('button');
+			deleteBtn.className = 'image-thumbnail-delete';
+			deleteBtn.innerHTML = '×';
+			deleteBtn.title = 'Remove image';
+			deleteBtn.onclick = function(e) {
+				e.stopPropagation();
+				removeImageThumbnail(standardizedData.id);
+			};
+
+			// Add elements to thumbnail
+			thumbnail.appendChild(img);
+			thumbnail.appendChild(deleteBtn);
+
+			// Add thumbnail to container
+			container.appendChild(thumbnail);
+
+			// Show feedback
+			showImageAddedFeedback(standardizedData.name);
+		}
+
+		function removeImageThumbnail(imageId) {
+			// Remove from attached images array
+			attachedImages = attachedImages.filter(img => img.id !== imageId);
+
+			// Remove thumbnail from DOM
+			const container = document.getElementById('imageAttachments');
+			const thumbnail = container.querySelector(\`[data-image-id="\${imageId}"]\`);
+			if (thumbnail) {
+				thumbnail.remove();
+			}
+
+			// Hide container if no images left
+			if (attachedImages.length === 0) {
+				container.style.display = 'none';
+			}
+		}
+
+		function clearAllImageAttachments() {
+			attachedImages = [];
+			const container = document.getElementById('imageAttachments');
+			container.innerHTML = '';
+			container.style.display = 'none';
+		}
+
+		function getAttachedImagePaths() {
+			return attachedImages.map(img => img.path);
+		}
+
+		function setupDragAndDrop() {
+			const chatContainer = document.getElementById('chatContainer');
+			const textareaContainer = document.getElementById('textareaContainer');
+			let isDragActive = false;
+
+			// Create a much larger, more reliable drop zone using the entire chat container
+			function handleDragEnter(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				
+				// Only activate for file drags
+				if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+					if (!isDragActive) {
+						isDragActive = true;
+						textareaContainer.classList.add('drag-over');
+						showDragOverlay();
+						console.log('Drag activated');
+					}
+				}
+			}
+
+			function handleDragOver(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				
+				if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+					e.dataTransfer.dropEffect = 'copy';
+					// Ensure drag state is active
+					if (!isDragActive) {
+						isDragActive = true;
+						textareaContainer.classList.add('drag-over');
+						showDragOverlay();
+					}
+				}
+			}
+
+			function handleDragLeave(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				
+				// Only deactivate if we're actually leaving the chat container
+				if (isDragActive && !chatContainer.contains(e.relatedTarget)) {
+					isDragActive = false;
+					textareaContainer.classList.remove('drag-over');
+					hideDragOverlay();
+					console.log('Drag deactivated');
+				}
+			}
+
+			function handleDrop(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				
+				console.log('Drop event triggered');
+				isDragActive = false;
+				textareaContainer.classList.remove('drag-over');
+				hideDragOverlay();
+
+				const files = e.dataTransfer.files;
+				if (files.length > 0) {
+					console.log('Processing dropped files:', files.length);
+					handleDroppedFiles(files);
+				}
+			}
+
+			// Add listeners to the entire chat container for maximum coverage
+			chatContainer.addEventListener('dragenter', handleDragEnter);
+			chatContainer.addEventListener('dragover', handleDragOver);
+			chatContainer.addEventListener('dragleave', handleDragLeave);
+			chatContainer.addEventListener('drop', handleDrop);
+
+			// Also add to document to catch any missed events
+			document.addEventListener('dragenter', function(e) {
+				if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+					e.preventDefault();
+				}
+			});
+
+			document.addEventListener('dragover', function(e) {
+				if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+					e.preventDefault();
+				}
+			});
+
+			document.addEventListener('drop', function(e) {
+				if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+					e.preventDefault();
+				}
+			});
+
+			console.log('Drag and drop setup completed with enhanced reliability');
+		}
+
+		function showDragOverlay() {
+			// Remove existing overlay if any
+			hideDragOverlay();
+			
+			const overlay = document.createElement('div');
+			overlay.id = 'dragOverlay';
+			overlay.className = 'drag-overlay';
+			overlay.innerHTML = \`
+				<div style="text-align: center; font-size: 16px; font-weight: 600;">
+					📁 Drop images here to attach
+					<br>
+					<small style="font-size: 12px; opacity: 0.8;">Supports PNG, JPG, GIF, SVG, WebP, BMP</small>
+				</div>
+			\`;
+			
+			const chatContainer = document.getElementById('chatContainer');
+			chatContainer.style.position = 'relative';
+			chatContainer.appendChild(overlay);
+			
+			console.log('Drag overlay shown');
+		}
+
+		function hideDragOverlay() {
+			const overlay = document.getElementById('dragOverlay');
+			if (overlay) {
+				overlay.remove();
+				console.log('Drag overlay hidden');
+			}
+		}
+
+		function handleDroppedFiles(files) {
+			const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'];
+			const maxFileSize = 10 * 1024 * 1024; // 10MB limit
+			let processedCount = 0;
+			let errorCount = 0;
+			
+			for (let i = 0; i < files.length; i++) {
+				const file = files[i];
+				const extension = file.name.split('.').pop()?.toLowerCase() || '';
+				
+				// Validate file type
+				if (!imageExtensions.includes(extension)) {
+					errorCount++;
+					continue;
+				}
+				
+				// Validate file size
+				if (file.size > maxFileSize) {
+					showImageAddedFeedback(\`File too large: \${file.name} (max 10MB)\`);
+					errorCount++;
+					continue;
+				}
+				
+				// Process valid image file
+				try {
+					handleDroppedImageFile(file);
+					processedCount++;
+				} catch (error) {
+					console.error('Error processing dropped file:', file.name, error);
+					showImageAddedFeedback(\`Failed to process: \${file.name}\`);
+					errorCount++;
+				}
+			}
+			
+			// Show feedback about results
+			if (processedCount === 0 && errorCount > 0) {
+				showImageAddedFeedback(\`No valid images found (\${errorCount} files rejected)\`);
+			} else if (processedCount > 0 && errorCount > 0) {
+				showImageAddedFeedback(\`Added \${processedCount} images (\${errorCount} files rejected)\`);
+			}
+		}
+
+		function handleDroppedImageFile(file) {
+			// For drag and drop, we need to create a temporary file path or data URL
+			// Since VS Code webviews have limited file access, we'll use a data URL approach
+			const reader = new FileReader();
+			
+			reader.onload = function(e) {
+				const dataUrl = e.target.result;
+				
+				// Use the standardized addImageThumbnail function
+				addImageThumbnail({
+					path: file.name,
+					name: file.name,
+					dataUrl: dataUrl,
+					isDropped: true,
+					isSelected: false
+				});
+			};
+			
+			reader.onerror = function() {
+				showImageAddedFeedback(\`Failed to load: \${file.name}\`);
+			};
+			
+			// Read the file as data URL for display
+			reader.readAsDataURL(file);
 		}
 
 		function displayConversationList(conversations) {

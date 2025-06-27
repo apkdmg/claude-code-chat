@@ -234,6 +234,7 @@ class ClaudeChatProvider {
 	private _historyProvider: ClaudeChatHistoryProvider | undefined;
 	private _currentClaudeProcess: cp.ChildProcess | undefined;
 	private _selectedModel: string = 'default'; // Default model
+	private _claudeUsageLimitProcessed: boolean = false; // Track if Claude usage limit error was already processed
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -342,6 +343,9 @@ class ClaudeChatProvider {
 			case 'sendMessage':
 				this._sendMessageToClaude(message.text, message.planMode, message.thinkingMode);
 				return;
+			case 'sendMessageWithImages':
+				this._sendMessageWithImagesToClaude(message.text, message.images, message.planMode, message.thinkingMode);
+				return;
 			case 'newSession':
 				this._newSession();
 				return;
@@ -432,6 +436,9 @@ class ClaudeChatProvider {
 	}
 
 	private async _sendMessageToClaude(message: string, planMode?: boolean, thinkingMode?: boolean) {
+		// Reset Claude usage limit processing flag for new request
+		this._claudeUsageLimitProcessed = false;
+		
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : process.cwd();
 
@@ -594,7 +601,12 @@ class ClaudeChatProvider {
 
 		claudeProcess.on('close', (code) => {
 			console.log('Claude process closed with code:', code);
-			console.log('Claude stderr output:', errorOutput);
+			
+			// Process error output for epoch timestamps before logging
+			if (errorOutput.trim()) {
+				const processedError = this._processErrorMessage(errorOutput.trim());
+				console.log('Claude stderr output (processed):', processedError);
+			}
 
 			// Clear process reference
 			this._currentClaudeProcess = undefined;
@@ -605,11 +617,23 @@ class ClaudeChatProvider {
 			});
 
 			if (code !== 0 && errorOutput.trim()) {
-				// Error with output
+				// Check if this is a Claude usage limit message and if it was already processed
+				if (errorOutput.trim().includes('Claude AI usage limit reached|') && this._claudeUsageLimitProcessed) {
+					// Skip processing if already handled
+					return;
+				}
+				
+				// Error with output - process for epoch timestamps
+				const processedError = this._processErrorMessage(errorOutput.trim());
 				this._sendAndSaveMessage({
 					type: 'error',
-					data: errorOutput.trim()
+					data: processedError
 				});
+				
+				// Mark as processed if it's a Claude usage limit message
+				if (errorOutput.trim().includes('Claude AI usage limit reached|')) {
+					this._claudeUsageLimitProcessed = true;
+				}
 			}
 		});
 
@@ -630,9 +654,321 @@ class ClaudeChatProvider {
 					data: 'Install claude code first: https://www.anthropic.com/claude-code'
 				});
 			} else {
+				const processedError = this._processErrorMessage(`Error running Claude: ${error.message}`);
 				this._sendAndSaveMessage({
 					type: 'error',
-					data: `Error running Claude: ${error.message}`
+					data: processedError
+				});
+			}
+		});
+	}
+
+	private async _sendMessageWithImagesToClaude(message: string, images: any[], planMode?: boolean, thinkingMode?: boolean) {
+		// Reset Claude usage limit processing flag for new request
+		this._claudeUsageLimitProcessed = false;
+		
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		if (!workspaceFolder) {
+			this._sendAndSaveMessage({
+				type: 'error',
+				data: 'No workspace folder found'
+			});
+			return;
+		}
+
+		try {
+			// Process images and prepare paths
+			const imagePaths: string[] = [];
+			const fs = require('fs');
+			const path = require('path');
+			const os = require('os');
+
+			for (const img of images) {
+				if (img.isSelected && img.path) {
+					// Selected files already have full paths
+					imagePaths.push(img.path);
+				} else if (img.isDropped && img.dataUrl) {
+					// Dropped files need to be saved to temporary location
+					try {
+						// Create temp directory if it doesn't exist
+						const tempDir = path.join(os.tmpdir(), 'claude-code-chat-images');
+						if (!fs.existsSync(tempDir)) {
+							fs.mkdirSync(tempDir, { recursive: true });
+						}
+
+						// Extract base64 data from data URL
+						const matches = img.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+						if (matches) {
+							const mimeType = matches[1];
+							const base64Data = matches[2];
+							
+							// Determine file extension from MIME type
+							let extension = 'png';
+							if (mimeType.includes('jpeg')) extension = 'jpg';
+							else if (mimeType.includes('gif')) extension = 'gif';
+							else if (mimeType.includes('svg')) extension = 'svg';
+							else if (mimeType.includes('webp')) extension = 'webp';
+							else if (mimeType.includes('bmp')) extension = 'bmp';
+
+							// Create unique filename
+							const timestamp = Date.now();
+							const filename = `dropped-image-${timestamp}.${extension}`;
+							const tempPath = path.join(tempDir, filename);
+
+							// Write file to temp location
+							fs.writeFileSync(tempPath, base64Data, 'base64');
+							imagePaths.push(tempPath);
+
+							console.log(`Saved dropped image to: ${tempPath}`);
+						}
+					} catch (error) {
+						console.error('Failed to save dropped image:', error);
+						this._sendAndSaveMessage({
+							type: 'error',
+							data: `Failed to process dropped image: ${img.name}`
+						});
+					}
+				}
+			}
+
+			// Build the complete message with image references
+			let completeMessage = message;
+			if (imagePaths.length > 0) {
+				const imageReferences = imagePaths.map(path => `@${path}`).join(' ');
+				completeMessage = message + (message ? ' ' : '') + imageReferences;
+			}
+
+			// Send the message to Claude without showing user input (already handled in frontend)
+			this._sendMessageToClaudeWithoutUserDisplay(completeMessage, planMode, thinkingMode);
+
+		} catch (error) {
+			console.error('Error processing images:', error);
+			this._sendAndSaveMessage({
+				type: 'error',
+				data: `Error processing images: ${error}`
+			});
+		}
+	}
+
+	private async _sendMessageToClaudeWithoutUserDisplay(message: string, planMode?: boolean, thinkingMode?: boolean) {
+		// Reset Claude usage limit processing flag for new request
+		this._claudeUsageLimitProcessed = false;
+		
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : process.cwd();
+
+		// Get thinking intensity setting
+		const configThink = vscode.workspace.getConfiguration('claudeCodeChat');
+		const thinkingIntensity = configThink.get<string>('thinking.intensity', 'think');
+
+		// Prepend mode instructions if enabled
+		let actualMessage = message;
+		if (planMode) {
+			actualMessage = 'PLAN FIRST BEFORE MAKING ANY CHANGES, SHOW ME IN DETAIL WHAT YOU WILL CHANGE. DONT PROCEED BEFORE I ACCEPT IN A DIFFERENT MESSAGE: \n' + message;
+		}
+		if (thinkingMode) {
+			let thinkingPrompt = '';
+			const thinkingMesssage = ' THROUGH THIS STEP BY STEP: \n'
+			switch (thinkingIntensity) {
+				case 'think':
+					thinkingPrompt = 'THINK';
+					break;
+				case 'think-hard':
+					thinkingPrompt = 'THINK HARD';
+					break;
+				case 'think-harder':
+					thinkingPrompt = 'THINK HARDER';
+					break;
+				case 'ultrathink':
+					thinkingPrompt = 'ULTRATHINK';
+					break;
+				default:
+					thinkingPrompt = 'THINK';
+			}
+			actualMessage = thinkingPrompt + thinkingMesssage + actualMessage;
+		}
+
+		// Skip showing user input - it's already handled in frontend
+
+		// Set processing state
+		this._webview?.postMessage({
+			type: 'setProcessing',
+			data: true
+		});
+
+		// Create backup commit before Claude makes changes
+		try {
+			await this._createBackupCommit(message);
+		}
+		catch (e) {
+			console.log("error", e);
+		}
+
+		// Show loading indicator
+		this._webview?.postMessage({
+			type: 'loading',
+			data: 'Claude is working...'
+		});
+
+		// Call claude with the message via stdin using stream-json format
+		console.log('Calling Claude with message via stdin:', message);
+
+		// Build command arguments with session management
+		const args = [
+			'-p',
+			'--output-format', 'stream-json', '--verbose',
+			'--dangerously-skip-permissions'
+		];
+
+		// Add model selection if not using default
+		if (this._selectedModel && this._selectedModel !== 'default') {
+			args.push('--model', this._selectedModel);
+			console.log('Using model:', this._selectedModel);
+		}
+
+		// Add session resume if we have a current session
+		if (this._currentSessionId) {
+			args.push('--resume', this._currentSessionId);
+			console.log('Resuming session:', this._currentSessionId);
+		} else {
+			console.log('Starting new session');
+		}
+
+		console.log('Claude command args:', args);
+
+		// Get configuration
+		const config = vscode.workspace.getConfiguration('claudeCodeChat');
+		const wslEnabled = config.get<boolean>('wsl.enabled', false);
+		const wslDistro = config.get<string>('wsl.distro', 'Ubuntu');
+		const nodePath = config.get<string>('wsl.nodePath', '/usr/bin/node');
+		const claudePath = config.get<string>('wsl.claudePath', '/usr/local/bin/claude');
+
+		let claudeProcess: cp.ChildProcess;
+
+		if (wslEnabled) {
+			// Use WSL
+			console.log('Using WSL configuration:', { wslDistro, nodePath, claudePath });
+			claudeProcess = cp.spawn('wsl', ['-d', wslDistro, nodePath, '--no-warnings', '--enable-source-maps', claudePath, ...args], {
+				cwd: cwd,
+				stdio: ['pipe', 'pipe', 'pipe'],
+				env: {
+					...process.env,
+					FORCE_COLOR: '0',
+					NO_COLOR: '1'
+				}
+			});
+		} else {
+			// Use native claude command
+			console.log('Using native Claude command');
+			claudeProcess = cp.spawn('claude', args, {
+				cwd: cwd,
+				stdio: ['pipe', 'pipe', 'pipe'],
+				env: {
+					...process.env,
+					FORCE_COLOR: '0',
+					NO_COLOR: '1'
+				}
+			});
+		}
+
+		// Store process reference for potential termination
+		this._currentClaudeProcess = claudeProcess;
+
+		// Send the message to Claude's stdin (with mode prefixes if enabled)
+		if (claudeProcess.stdin) {
+			claudeProcess.stdin.write(actualMessage + '\n');
+			claudeProcess.stdin.end();
+		}
+
+		let rawOutput = '';
+		let errorOutput = '';
+
+		if (claudeProcess.stdout) {
+			claudeProcess.stdout.on('data', (data) => {
+				rawOutput += data.toString();
+
+				// Process JSON stream line by line
+				const lines = rawOutput.split('\n');
+				rawOutput = lines.pop() || ''; // Keep incomplete line for next chunk
+
+				for (const line of lines) {
+					if (line.trim()) {
+						try {
+							const jsonData = JSON.parse(line.trim());
+							this._processJsonStreamData(jsonData);
+						} catch (error) {
+							console.log('Failed to parse JSON line:', line, error);
+						}
+					}
+				}
+			});
+		}
+
+		if (claudeProcess.stderr) {
+			claudeProcess.stderr.on('data', (data) => {
+				errorOutput += data.toString();
+			});
+		}
+
+		claudeProcess.on('close', (code) => {
+			console.log('Claude process closed with code:', code);
+			
+			// Process error output for epoch timestamps before logging
+			if (errorOutput.trim()) {
+				const processedError = this._processErrorMessage(errorOutput.trim());
+				console.log('Claude stderr output (processed):', processedError);
+			}
+
+			// Clear process reference
+			this._currentClaudeProcess = undefined;
+
+			// Clear loading indicator
+			this._webview?.postMessage({
+				type: 'clearLoading'
+			});
+
+			if (code !== 0 && errorOutput.trim()) {
+				// Check if this is a Claude usage limit message and if it was already processed
+				if (errorOutput.trim().includes('Claude AI usage limit reached|') && this._claudeUsageLimitProcessed) {
+					// Skip processing if already handled
+					return;
+				}
+				
+				// Error with output - process for epoch timestamps
+				const processedError = this._processErrorMessage(errorOutput.trim());
+				this._sendAndSaveMessage({
+					type: 'error',
+					data: processedError
+				});
+				
+				// Mark as processed if it's a Claude usage limit message
+				if (errorOutput.trim().includes('Claude AI usage limit reached|')) {
+					this._claudeUsageLimitProcessed = true;
+				}
+			}
+		});
+
+		claudeProcess.on('error', (error) => {
+			console.log('Claude process error:', error.message);
+			
+			// Clear process reference
+			this._currentClaudeProcess = undefined;
+			
+			this._webview?.postMessage({
+				type: 'clearLoading'
+			});
+			
+			// Check if claude command is not installed
+			if (error.message.includes('ENOENT') || error.message.includes('command not found')) {
+				this._sendAndSaveMessage({
+					type: 'error',
+					data: 'Install claude code first: https://www.anthropic.com/claude-code'
+				});
+			} else {
+				const processedError = this._processErrorMessage(`Error running Claude: ${error.message}`);
+				this._sendAndSaveMessage({
+					type: 'error',
+					data: processedError
 				});
 			}
 		});
@@ -673,11 +1009,27 @@ class ClaudeChatProvider {
 					// Process each content item in the assistant message
 					for (const content of jsonData.message.content) {
 						if (content.type === 'text' && content.text.trim()) {
-							// Show text content and save to conversation
+						// Check if this is a Claude usage limit message that should be processed as error
+						const textContent = content.text.trim();
+						if (textContent.includes('Claude AI usage limit reached|')) {
+							// Check if already processed to prevent duplicates
+							if (this._claudeUsageLimitProcessed) {
+								continue; // Skip if already processed
+							}
+							// Process as error message instead of output
+							const processedError = this._processErrorMessage(textContent);
+							this._sendAndSaveMessage({
+								type: 'error',
+								data: processedError
+							});
+							this._claudeUsageLimitProcessed = true;
+						} else {
+							// Show normal text content and save to conversation
 							this._sendAndSaveMessage({
 								type: 'output',
-								data: content.text.trim()
+								data: textContent
 							});
+						}
 						} else if (content.type === 'thinking' && content.thinking.trim()) {
 							// Show thinking content and save to conversation
 							this._sendAndSaveMessage({
@@ -770,6 +1122,16 @@ class ClaudeChatProvider {
 						return;
 					}
 
+					// Handle other errors with epoch conversion (skip if Claude usage limit already processed)
+				if (jsonData.is_error && jsonData.result && !this._claudeUsageLimitProcessed) {
+					const processedError = this._processErrorMessage(jsonData.result);
+					this._sendAndSaveMessage({
+						type: 'error',
+						data: processedError
+					});
+					return;
+				}
+
 					// Capture session ID from final result
 					if (jsonData.session_id) {
 						const isNewSession = !this._currentSessionId;
@@ -840,6 +1202,9 @@ class ClaudeChatProvider {
 		this._commits = [];
 		this._currentConversation = [];
 		this._conversationStartTime = undefined;
+		
+		// Reset Claude usage limit processing flag
+		this._claudeUsageLimitProcessed = false;
 
 		// Reset counters
 		this._totalCost = 0;
@@ -1223,13 +1588,62 @@ class ClaudeChatProvider {
 			});
 			
 			if (result && result.length > 0) {
-				// Send the selected file paths back to webview
-				result.forEach(uri => {
-					this._webview?.postMessage({
-						type: 'imagePath',
-						path: uri.fsPath
-					});
-				});
+				// Process each selected file
+				for (const uri of result) {
+					try {
+						// Read the file content
+						const fileData = await vscode.workspace.fs.readFile(uri);
+						
+						// Get file extension to determine MIME type
+						const fileName = uri.path.split('/').pop() || 'image';
+						const extension = fileName.split('.').pop()?.toLowerCase() || '';
+						
+						// Determine MIME type
+						let mimeType = 'image/png'; // default
+						switch (extension) {
+							case 'jpg':
+							case 'jpeg':
+								mimeType = 'image/jpeg';
+								break;
+							case 'png':
+								mimeType = 'image/png';
+								break;
+							case 'gif':
+								mimeType = 'image/gif';
+								break;
+							case 'svg':
+								mimeType = 'image/svg+xml';
+								break;
+							case 'webp':
+								mimeType = 'image/webp';
+								break;
+							case 'bmp':
+								mimeType = 'image/bmp';
+								break;
+						}
+						
+						// Convert to base64 data URL
+						const base64Data = Buffer.from(fileData).toString('base64');
+						const dataUrl = `data:${mimeType};base64,${base64Data}`;
+						
+						// Send image data back to webview
+						this._webview?.postMessage({
+							type: 'imageData',
+							path: uri.fsPath,
+							name: fileName,
+							dataUrl: dataUrl,
+							isSelected: true
+						});
+						
+					} catch (fileError) {
+						console.error('Error reading image file:', uri.fsPath, fileError);
+						// Send error notification
+						this._webview?.postMessage({
+							type: 'imageError',
+							message: `Failed to load image: ${uri.path.split('/').pop()}`
+						});
+					}
+				}
 			}
 			
 		} catch (error) {
@@ -1411,6 +1825,59 @@ class ClaudeChatProvider {
 			console.error('Failed to update settings:', error);
 			vscode.window.showErrorMessage('Failed to update settings');
 		}
+	}
+
+	private _processErrorMessage(errorMessage: string): string {
+		// Look for Claude usage limit messages with epoch timestamps
+		const usageLimitRegex = /Claude AI usage limit reached\|(\d{10})/;
+		const match = errorMessage.match(usageLimitRegex);
+		
+		if (match) {
+			try {
+				const epochTime = parseInt(match[1], 10);
+				// Convert epoch (seconds) to milliseconds for JavaScript Date
+				const date = new Date(epochTime * 1000);
+				
+				// Format time for Asia/Kuala_Lumpur timezone
+				const options: Intl.DateTimeFormatOptions = {
+					hour: 'numeric',
+					minute: '2-digit',
+					timeZone: 'Asia/Kuala_Lumpur'
+				};
+				
+				const timeString = date.toLocaleString('en-US', options);
+				return `Claude usage limit reached. Your limit will reset at ${timeString} (Asia/Kuala_Lumpur).`;
+			} catch (error) {
+				// If conversion fails, return original
+				return errorMessage;
+			}
+		}
+		
+		// For other error messages, look for general epoch timestamps
+		const epochRegex = /\b(\d{10})\b/g;
+		return errorMessage.replace(epochRegex, (match, epochStr) => {
+			try {
+				const epochTime = parseInt(epochStr, 10);
+				// Convert epoch (seconds) to milliseconds for JavaScript Date
+				const date = new Date(epochTime * 1000);
+				
+				// Format as human-readable time with timezone
+				const options: Intl.DateTimeFormatOptions = {
+					year: 'numeric',
+					month: 'short',
+					day: 'numeric',
+					hour: '2-digit',
+					minute: '2-digit',
+					timeZoneName: 'short'
+				};
+				
+				const humanReadable = date.toLocaleString(undefined, options);
+				return `${humanReadable} (${epochStr})`;
+			} catch (error) {
+				// If conversion fails, return original
+				return match;
+			}
+		});
 	}
 
 	private async _getClipboardText(): Promise<void> {
