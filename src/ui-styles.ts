@@ -481,6 +481,13 @@ const styles = `
         border: none;
     }
 
+    .message.tool-edit-flat {
+        padding: 0;
+        margin: 8px 0;
+        background: transparent;
+        border: none;
+    }
+
     .message.tool::before {
         display: none;
     }
@@ -519,6 +526,64 @@ const styles = `
         bottom: 0;
         width: 4px;
         background: linear-gradient(180deg, #ba55d3 0%, #9932cc 100%);
+    }
+
+    /* Collapsed thinking styles */
+    .message.thinking.thinking-collapsed {
+        border: none;
+        background: transparent;
+        opacity: 1;
+        font-style: normal;
+        cursor: pointer;
+
+    }
+
+    .message.thinking.thinking-collapsed::before {
+        display: none;
+    }
+
+    .thinking-header {
+        display: flex;
+        align-items: left;
+        gap: 20px;
+        padding: 8px 0;
+        user-select: none;
+        transition: all 0.2s ease;
+        border-radius: 6px;
+    }
+
+    .thinking-header:hover {
+        background: rgba(128, 128, 128, 0.05);
+    }
+
+    .thinking-chevron {
+        font-size: 10px;
+        color: rgba(128, 128, 128, 0.6);
+        transition: transform 0.2s ease;
+        width: 12px;
+        text-align: center;
+        margin-right: 10px;
+    }
+
+    .thinking-label {
+        font-size: 12px;
+        font-weight: 400;
+        color: rgba(128, 128, 128, 0.7);
+        letter-spacing: 0.02em;
+    }
+
+    .thinking-expandable-content {
+        padding: 12px 0 12px 0;
+        transition: all 0.2s ease;
+        font-size: 12px;
+    }
+
+    .thinking-collapsed-header{
+        cursor: pointer;
+    }
+
+    .message.thinking.thinking-collapsed .thinking-expandable-content {
+        display: none;
     }
 
     .tool-header {
@@ -656,7 +721,7 @@ const styles = `
         font-size: 13px;
         line-height: 1.5;
         margin: 0;
-        padding-bottom: 8px;
+        // padding-bottom: 8px;
     }
 
     .result-show-more-btn {
@@ -914,6 +979,12 @@ const styles = `
         font-weight: 600;
         color: var(--vscode-foreground);
         border-bottom: 1px solid var(--vscode-panel-border);
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+    .diff-header:hover {
+        background-color: var(--vscode-list-hoverBackground);
     }
 
     .diff-removed,
@@ -2423,6 +2494,7 @@ const styles = `
         color: var(--vscode-foreground);
         opacity: 0.8;
     }
+
 </style>`;
 
 export default styles;

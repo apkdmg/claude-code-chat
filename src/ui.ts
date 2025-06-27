@@ -528,6 +528,43 @@ const html = `<!DOCTYPE html>
 			const messageDiv = document.createElement('div');
 			messageDiv.className = \`message \${type}\`;
 			
+			// Special handling for thinking messages
+			if (type === 'thinking') {
+				// Auto-collapse thinking when a new message appears after it
+				collapseExistingThinking();
+				
+				// Create minimalist collapsed state by default
+				messageDiv.classList.add('thinking-collapsed');
+				
+				// Create the collapsed header
+				const collapsedHeader = document.createElement('div');
+				collapsedHeader.className = 'thinking-collapsed-header';
+				collapsedHeader.onclick = () => toggleThinkingExpansion(messageDiv);
+				
+				const chevronIcon = document.createElement('span');
+				chevronIcon.className = 'thinking-chevron';
+				chevronIcon.innerHTML = '▶';
+				
+				const thinkingLabel = document.createElement('span');
+				thinkingLabel.className = 'thinking-label';
+				thinkingLabel.textContent = 'Thought Process';
+				
+				collapsedHeader.appendChild(chevronIcon);
+				collapsedHeader.appendChild(thinkingLabel);
+				messageDiv.appendChild(collapsedHeader);
+				
+				// Create the expandable content (hidden by default)
+				const expandableContent = document.createElement('div');
+				expandableContent.className = 'thinking-expandable-content';
+				expandableContent.style.display = 'none';
+				expandableContent.innerHTML = content;
+				messageDiv.appendChild(expandableContent);
+				
+				messagesDiv.appendChild(messageDiv);
+				messagesDiv.scrollTop = messagesDiv.scrollHeight;
+				return;
+			}
+			
 			// Add header for main message types (excluding system)
 			if (type === 'user' || type === 'claude' || type === 'error') {
 				const headerDiv = document.createElement('div');
@@ -587,7 +624,7 @@ const html = `<!DOCTYPE html>
 			const contentDiv = document.createElement('div');
 			contentDiv.className = 'message-content';
 			
-			if(type == 'user' || type === 'claude' || type === 'thinking'){
+			if(type == 'user' || type === 'claude'){
 				contentDiv.innerHTML = content;
 			} else if (type === 'error' && messageDiv.classList.contains('compact')) {
 				// Handle compact error layout
@@ -744,6 +781,12 @@ const html = `<!DOCTYPE html>
 				compactDiv.appendChild(filePathDiv);
 				messageDiv.appendChild(compactDiv);
 				messageDiv.classList.add('tool-read-compact');
+			} else if (toolName === 'Edit' && data.rawInput) {
+				// For Edit tool, create flat layout without tool header - just show diff directly
+				const editContentDiv = document.createElement('div');
+				editContentDiv.innerHTML = formatEditToolDiff(data.rawInput);
+				messageDiv.appendChild(editContentDiv);
+				messageDiv.classList.add('tool-edit-flat');
 			} else {
 				// Create modern header with icon for other tools
 				const headerDiv = document.createElement('div');
@@ -762,8 +805,8 @@ const html = `<!DOCTYPE html>
 				messageDiv.appendChild(headerDiv);
 			}
 			
-			// Skip input content display for Read tool since file path is already shown in compact header
-			if (data.rawInput && toolName !== 'Read') {
+			// Skip input content display for Read and Edit tools since they have their own compact/flat formats
+			if (data.rawInput && toolName !== 'Read' && toolName !== 'Edit') {
 				const inputElement = document.createElement('div');
 				inputElement.className = 'tool-input';
 				
@@ -1011,11 +1054,11 @@ const html = `<!DOCTYPE html>
 				return formatToolInputUI(input);
 			}
 
-			// Format file path with better display
+			// Create ultra-compact Edit tool display
+			const editId = 'edit_' + Math.random().toString(36).substr(2, 9);
 			const formattedPath = formatFilePath(input.file_path);
-			let result = '<div class="diff-file-path" onclick="openFileInEditor(\\\'' + escapeHtml(input.file_path) + '\\\')">' + formattedPath + '</div>\\n';
 			
-			// Create diff view
+			// Create diff view with integrated file path and changes info
 			const oldLines = input.old_string.split('\\n');
 			const newLines = input.new_string.split('\\n');
 			const allLines = [...oldLines.map(line => ({type: 'removed', content: line})), 
@@ -1026,14 +1069,11 @@ const html = `<!DOCTYPE html>
 			const visibleLines = shouldTruncate ? allLines.slice(0, maxLines) : allLines;
 			const hiddenLines = shouldTruncate ? allLines.slice(maxLines) : [];
 			
-			result += '<div class="diff-container">';
-			result += '<div class="diff-header">Changes:</div>';
-			
-			// Create a unique ID for this diff
-			const diffId = 'diff_' + Math.random().toString(36).substr(2, 9);
+			let result = '<div class="diff-container">';
+			result += '<div class="diff-header" onclick="openFileInEditor(\\\'' + escapeHtml(input.file_path) + '\\\')">Edit ' + formattedPath + ' (' + oldLines.length + ' removed, ' + newLines.length + ' added):</div>';
 			
 			// Show visible lines
-			result += '<div id="' + diffId + '_visible">';
+			result += '<div id="' + editId + '_visible">';
 			for (const line of visibleLines) {
 				const prefix = line.type === 'removed' ? '- ' : '+ ';
 				const cssClass = line.type === 'removed' ? 'removed' : 'added';
@@ -1043,7 +1083,7 @@ const html = `<!DOCTYPE html>
 			
 			// Show hidden lines (initially hidden)
 			if (shouldTruncate) {
-				result += '<div id="' + diffId + '_hidden" style="display: none;">';
+				result += '<div id="' + editId + '_hidden" style="display: none;">';
 				for (const line of hiddenLines) {
 					const prefix = line.type === 'removed' ? '- ' : '+ ';
 					const cssClass = line.type === 'removed' ? 'removed' : 'added';
@@ -1053,7 +1093,7 @@ const html = `<!DOCTYPE html>
 				
 				// Add expand button
 				result += '<div class="diff-expand-container">';
-				result += '<button class="diff-expand-btn" onclick="toggleDiffExpansion(\\\'' + diffId + '\\\')">...</button>';
+				result += '<button class="diff-expand-btn" onclick="toggleDiffExpansion(\\\'' + editId + '\\\')">...</button>';
 				result += '</div>';
 			}
 			
@@ -2960,6 +3000,44 @@ const html = `<!DOCTYPE html>
 				toggleDiv.textContent = 'Hide';
 			}
 		}
+
+		// Thinking collapse/expand functions
+		function collapseExistingThinking() {
+			const existingThinking = document.querySelectorAll('.message.thinking:not(.thinking-collapsed)');
+			existingThinking.forEach(thinkingElement => {
+				thinkingElement.classList.add('thinking-collapsed');
+				const content = thinkingElement.querySelector('.thinking-expandable-content');
+				if (content) {
+					content.style.display = 'none';
+				}
+				const chevron = thinkingElement.querySelector('.thinking-chevron');
+				if (chevron) {
+					chevron.innerHTML = '▶';
+				}
+			});
+		}
+		
+		function toggleThinkingExpansion(messageDiv) {
+			const isCollapsed = messageDiv.classList.contains('thinking-collapsed');
+			const content = messageDiv.querySelector('.thinking-expandable-content');
+			const chevron = messageDiv.querySelector('.thinking-chevron');
+			
+			if (isCollapsed) {
+				// Expand
+				messageDiv.classList.remove('thinking-collapsed');
+				if (content) content.style.display = 'block';
+				if (chevron) chevron.innerHTML = '▼';
+			} else {
+				// Collapse
+				messageDiv.classList.add('thinking-collapsed');
+				if (content) content.style.display = 'none';
+				if (chevron) chevron.innerHTML = '▶';
+			}
+		}
+		
+		// Make functions globally available
+		window.collapseExistingThinking = collapseExistingThinking;
+		window.toggleThinkingExpansion = toggleThinkingExpansion;
 
 		function toggleExpand(button) {
 			const key = button.dataset.key;
